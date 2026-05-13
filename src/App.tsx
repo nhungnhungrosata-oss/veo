@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, Minus, ImagePlus, Check, Copy, Wand2, History, Trash2, Edit2, Play, Sparkles, Download, Loader2 } from "lucide-react";
+import { Plus, Minus, ImagePlus, Check, Copy, Wand2, History, Trash2, Edit2, Play, Sparkles, Download, Loader2, RefreshCw, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { toCanvas } from "html-to-image";
@@ -8,6 +8,7 @@ import { compressImage } from "./lib/image";
 import { suggestScripts, generateContent } from "./services/ai";
 import { getHistory, saveResult } from "./services/storage";
 import { AppState, GeneratedResult, VoiceType, VideoModelType } from "./types";
+import localforage from "localforage";
 
 import { Button } from "./components/ui/button";
 import { Textarea } from "./components/ui/textarea";
@@ -28,6 +29,8 @@ const INITIAL_STATE: AppState = {
   voice: "Bắc",
   videoModel: "Veo 3",
 };
+
+const IMAGE_LIBRARY_KEY = "clipbrand_image_library";
 
 function ThumbnailItem({ thumb, refImage, idx }: { key?: React.Key, thumb: any, refImage: string | undefined, idx: number }) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -109,17 +112,19 @@ export default function App() {
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [history, setHistory] = useState<GeneratedResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [currentResult, setCurrentResult] = useState<GeneratedResult | null>(null);
-  const [hasApiKey, setHasApiKey] = useState<boolean>(true); // kiểm tra key
+  const [hasApiKey, setHasApiKey] = useState<boolean>(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const suggestionTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadHistory();
-    // Kiểm tra xem đã có Gemini API key chưa
     checkApiKey();
+    // Fix 2: Load ảnh thư viện từ localStorage
+    loadImageLibrary();
   }, []);
 
   const checkApiKey = () => {
@@ -138,6 +143,35 @@ export default function App() {
     }
   };
 
+  // Fix 2: Load & Save ảnh thư viện
+  const loadImageLibrary = async () => {
+    try {
+      const saved = await localforage.getItem<string[]>(IMAGE_LIBRARY_KEY);
+      if (saved && saved.length > 0) {
+        setState(s => ({ ...s, images: saved, selectedImageIndex: 0 }));
+      }
+    } catch (e) {
+      console.warn("Không load được thư viện ảnh", e);
+    }
+  };
+
+  const saveImageLibrary = async (images: string[]) => {
+    try {
+      // Giữ tối đa 6 ảnh gần nhất để tránh tràn bộ nhớ
+      await localforage.setItem(IMAGE_LIBRARY_KEY, images.slice(0, 6));
+    } catch (e) {
+      console.warn("Không lưu được thư viện ảnh", e);
+    }
+  };
+
+  // Fix 3: Tạo mới kịch bản
+  const handleNewScript = () => {
+    setState({ ...INITIAL_STATE, images: state.images, selectedImageIndex: state.selectedImageIndex });
+    setCurrentResult(null);
+    setSuggestions([]);
+    toast.info("Đã tạo kịch bản mới. Giữ lại ảnh tham chiếu cũ.");
+  };
+
   const loadHistory = async () => {
     const hist = await getHistory();
     setHistory(hist);
@@ -148,18 +182,25 @@ export default function App() {
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
-    // Word limit approx
     if (val.trim().split(/\s+/).length > 2000) return;
-    
     setState((s) => ({ ...s, content: val }));
 
     if (suggestionTimeout.current) clearTimeout(suggestionTimeout.current);
 
     if (val.trim().split(/\s+/).length >= 4) {
+      // Fix 1: Giảm debounce xuống 500ms để gợi ý nhanh hơn
       suggestionTimeout.current = setTimeout(async () => {
-        const sugs = await suggestScripts(val);
-        setSuggestions(sugs);
-      }, 1000); // 1s debounce
+        setSuggestLoading(true);
+        try {
+          const sugs = await suggestScripts(val);
+          setSuggestions(sugs);
+        } catch (err: any) {
+          // Lỗi key thì không show gợi ý, không hiện toast để không làm phiền
+          setSuggestions([]);
+        } finally {
+          setSuggestLoading(false);
+        }
+      }, 500);
     } else {
       setSuggestions([]);
     }
@@ -177,15 +218,14 @@ export default function App() {
       try {
         const compressed = await compressImage(file);
         setState((s) => {
-          const newImages = [compressed, ...s.images];
-          return {
-            ...s,
-            images: newImages,
-            selectedImageIndex: 0, // Auto-select the newly uploaded one
-          };
+          const newImages = [compressed, ...s.images].slice(0, 6);
+          // Fix 2: Lưu vào thư viện
+          saveImageLibrary(newImages);
+          return { ...s, images: newImages, selectedImageIndex: 0 };
         });
+        toast.success("Đã thêm ảnh vào thư viện!");
       } catch (err) {
-        toast.error("Format image calculation failed.");
+        toast.error("Lỗi khi tải ảnh lên.");
       }
     }
   };
@@ -253,8 +293,14 @@ export default function App() {
             </div>
             <h1 className="font-bold text-lg tracking-tight text-white">ClipBrand AI</h1>
           </div>
-          <div className="flex items-center gap-3">
-            <p className="text-sm text-brand-bg-sub hidden sm:block font-medium">Chuyên gia video ngắn tự động</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleNewScript}
+              title="Tạo kịch bản mới"
+              className="flex items-center gap-1.5 bg-white/15 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-white/30 transition-all"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Tạo mới
+            </button>
             <a
               href="/api-settings.html"
               target="_blank"
@@ -291,7 +337,7 @@ export default function App() {
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <Label className="text-base font-semibold leading-none text-brand-text-title">1. Ảnh tham chiếu</Label>
-              <span className="text-xs text-brand-text-muted">Tối đa 1 ảnh</span>
+              <span className="text-xs text-brand-text-muted">Thư viện: {state.images.length}/6 ảnh</span>
             </div>
             <Card className="border-brand-border border shadow-sm rounded-[16px] overflow-hidden bg-brand-bg-main shadow-[0_2px_12px_rgba(14,165,233,0.1)]">
               <div className="p-4">
@@ -316,6 +362,21 @@ export default function App() {
                             </div>
                           </div>
                         )}
+                        {/* Nút xóa ảnh khỏi thư viện */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setState(s => {
+                              const newImgs = s.images.filter((_, i) => i !== idx);
+                              const newIdx = newImgs.length > 0 ? 0 : null;
+                              saveImageLibrary(newImgs);
+                              return { ...s, images: newImgs, selectedImageIndex: newIdx };
+                            });
+                          }}
+                          className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white rounded-full p-0.5 transition-colors z-10"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -339,7 +400,7 @@ export default function App() {
                 onChange={handleContentChange}
               />
               <AnimatePresence>
-                {suggestions.length > 0 && (
+                {(suggestions.length > 0 || suggestLoading) && (
                   <motion.div 
                     initial={{ opacity: 0, y: -10 }} 
                     animate={{ opacity: 1, y: 0 }} 
@@ -347,9 +408,15 @@ export default function App() {
                     className="absolute top-full left-0 right-0 mt-2 p-2 bg-brand-bg-main border border-brand-border rounded-xl shadow-xl z-10"
                   >
                     <p className="text-xs font-medium text-brand-text-muted px-2 pb-2 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-brand-yellow" /> AI Gợi ý hướng đi:
+                      <Sparkles className="w-3 h-3 text-brand-yellow" /> AI Gợi ý tiêu đề:
+                      {suggestLoading && <Loader2 className="w-3 h-3 animate-spin ml-1 text-brand-blue" />}
                     </p>
                     <div className="space-y-2 max-h-[350px] overflow-y-auto px-1">
+                      {suggestLoading && suggestions.length === 0 && (
+                        <div className="px-3 py-3 text-sm text-brand-text-muted flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-brand-blue" /> Đang tạo gợi ý...
+                        </div>
+                      )}
                       {suggestions.map((sug, i) => (
                         <button 
                           key={i} 
@@ -648,4 +715,3 @@ export default function App() {
     </div>
   );
 }
-
