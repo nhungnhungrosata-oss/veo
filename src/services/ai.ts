@@ -2,12 +2,16 @@ import { GoogleGenAI } from "@google/genai";
 import { AppState, GeneratedResult, ScriptScene, ThumbnailVariation } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
-// Initialize AI explicitly avoiding the auto-check for environment variables if unavailable
-const apiKey = process.env.GEMINI_API_KEY;
+// Safely get API key for Vite/Vercel compatibility
+// @ts-ignore
+const mEnv = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+const pEnv = typeof process !== 'undefined' ? process.env : {};
+
+const apiKey = pEnv.GEMINI_API_KEY || mEnv.VITE_GEMINI_API_KEY || "";
 if (!apiKey) {
   console.error("GEMINI_API_KEY is not defined.");
 }
-const ai = new GoogleGenAI({ apiKey: apiKey || "" });
+const ai = new GoogleGenAI({ apiKey });
 
 interface AIResponse {
   hook: string;

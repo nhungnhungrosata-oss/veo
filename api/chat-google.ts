@@ -14,6 +14,8 @@ if (process.env.GOOGLE_API_KEY) {
 
 const rateLimitMap = new Map<string, { count: number, resetAt: number }>();
 
+export const maxDuration = 30;
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');

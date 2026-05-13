@@ -29,7 +29,7 @@ const INITIAL_STATE: AppState = {
   videoModel: "Veo 3",
 };
 
-function ThumbnailItem({ thumb, refImage, idx }: { thumb: any, refImage: string, idx: number }) {
+function ThumbnailItem({ thumb, refImage, idx }: { key?: React.Key, thumb: any, refImage: string | undefined, idx: number }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
 
