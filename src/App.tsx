@@ -676,15 +676,12 @@ export default function App() {
             className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer"
             onClick={() => {
               const url = 'https://labs.google/fx/tools/flow';
-              const w = window.open(url, '_blank', 'noopener,noreferrer');
-              if (!w) {
-                const a = document.createElement('a');
-                a.href = url;
-                a.target = '_blank';
-                a.rel = 'noopener noreferrer';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+              const isAndroid = /android/i.test(navigator.userAgent);
+              if (isAndroid) {
+                window.location.href = `intent://${url.replace('https://', '')}#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`;
+              } else {
+                // iOS PWA + desktop: window.open mở Safari/tab mới, không ghi đè PWA
+                window.open(url, '_blank');
               }
             }}
           >
@@ -698,26 +695,17 @@ export default function App() {
           <button
             className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer"
             onClick={() => {
-              const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
               const isAndroid = /android/i.test(navigator.userAgent);
-
+              const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+              const fallback = encodeURIComponent('https://play.google.com/store/apps/details?id=ai.x.grok');
               if (isAndroid) {
-                // Dùng iframe ẩn để thử mở app, không navigate đè app
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = 'intent://grok#Intent;scheme=grok;package=ai.x.grok;end';
-                document.body.appendChild(iframe);
-                setTimeout(() => {
-                  document.body.removeChild(iframe);
-                  // Nếu app chưa cài → mở CH Play tab mới
-                  const w = window.open('https://play.google.com/store/apps/details?id=ai.x.grok', '_blank', 'noopener,noreferrer');
-                  if (!w) window.location.href = 'https://play.google.com/store/apps/details?id=ai.x.grok';
-                }, 1200);
+                window.location.href = `intent://grok#Intent;scheme=grok;package=ai.x.grok;S.browser_fallback_url=${fallback};end`;
               } else if (isIOS) {
+                // Thử mở app Grok — iOS tự xử lý, không navigate PWA nếu app có
                 window.location.href = 'grok://';
+                // Fallback: nếu Grok chưa cài → mở App Store trong Safari riêng
                 setTimeout(() => {
-                  const w = window.open('https://apps.apple.com/app/grok/id6670324846', '_blank', 'noopener,noreferrer');
-                  if (!w) window.location.href = 'https://apps.apple.com/app/grok/id6670324846';
+                  window.open('https://apps.apple.com/app/grok/id6670324846', '_blank');
                 }, 1500);
               } else {
                 window.open('https://x.ai/grok', '_blank', 'noopener,noreferrer');
