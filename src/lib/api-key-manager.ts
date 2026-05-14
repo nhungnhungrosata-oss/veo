@@ -59,7 +59,7 @@ export class ApiKeyManager {
       deepseek: {
         keys: [],
         currentIndex: 0,
-        model: "deepseek-chat",
+        model: "deepseek-v4-flash",
         endpoint: "https://api.deepseek.com/chat/completions"
       }
     };
