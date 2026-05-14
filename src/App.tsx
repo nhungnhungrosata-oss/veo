@@ -675,13 +675,17 @@ export default function App() {
           <button
             className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer"
             onClick={() => {
-              const a = document.createElement('a');
-              a.href = 'https://labs.google/fx/tools/flow';
-              a.target = '_blank';
-              a.rel = 'noopener noreferrer';
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
+              const url = 'https://labs.google/fx/tools/flow';
+              const w = window.open(url, '_blank', 'noopener,noreferrer');
+              if (!w) {
+                const a = document.createElement('a');
+                a.href = url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+              }
             }}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" strokeWidth="2.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
@@ -694,36 +698,29 @@ export default function App() {
           <button
             className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer"
             onClick={() => {
-              // Thử mở app Grok, nếu không có thì về store
               const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
               const isAndroid = /android/i.test(navigator.userAgent);
-              const appStoreUrl = isIOS
-                ? 'https://apps.apple.com/app/grok/id6670324846'
-                : 'https://play.google.com/store/apps/details?id=ai.x.grok';
-
-              // Thử deep link, nếu sau 1.5s vẫn ở trang này → chuyển về store
-              let redirected = false;
-              const timer = setTimeout(() => {
-                if (!redirected && !document.hidden) {
-                  window.location.href = appStoreUrl;
-                }
-              }, 1500);
-
-              document.addEventListener('visibilitychange', function onHide() {
-                if (document.hidden) {
-                  redirected = true;
-                  clearTimeout(timer);
-                  document.removeEventListener('visibilitychange', onHide);
-                }
-              });
 
               if (isAndroid) {
-                window.location.href = 'intent://grok#Intent;scheme=grok;package=ai.x.grok;end';
+                // Dùng iframe ẩn để thử mở app, không navigate đè app
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = 'intent://grok#Intent;scheme=grok;package=ai.x.grok;end';
+                document.body.appendChild(iframe);
+                setTimeout(() => {
+                  document.body.removeChild(iframe);
+                  // Nếu app chưa cài → mở CH Play tab mới
+                  const w = window.open('https://play.google.com/store/apps/details?id=ai.x.grok', '_blank', 'noopener,noreferrer');
+                  if (!w) window.location.href = 'https://play.google.com/store/apps/details?id=ai.x.grok';
+                }, 1200);
               } else if (isIOS) {
                 window.location.href = 'grok://';
+                setTimeout(() => {
+                  const w = window.open('https://apps.apple.com/app/grok/id6670324846', '_blank', 'noopener,noreferrer');
+                  if (!w) window.location.href = 'https://apps.apple.com/app/grok/id6670324846';
+                }, 1500);
               } else {
-                clearTimeout(timer);
-                window.open('https://x.ai/grok', '_blank');
+                window.open('https://x.ai/grok', '_blank', 'noopener,noreferrer');
               }
             }}
           >
