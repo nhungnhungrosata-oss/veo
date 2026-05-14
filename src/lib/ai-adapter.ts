@@ -134,7 +134,7 @@ export class AiAdapter {
   }
 
   private async chatDeepseek(key: string, messages: ChatMessage[], options: ChatOptions, keyLabel: string): Promise<ChatResponse> {
-    const model = 'deepseek-chat';
+    const model = 'deepseek-v4-flash';
     const endpoint = 'https://api.deepseek.com/chat/completions';
     
     const response = await fetch(endpoint, {
