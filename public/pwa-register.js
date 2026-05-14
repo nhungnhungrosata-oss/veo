@@ -1,31 +1,36 @@
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => {
-        console.log('SW registered:', reg.scope);
-        // Kiểm tra update ngay khi load
-        reg.update();
-        // Khi có SW mới waiting → activate ngay, không chờ tab đóng
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          if (!newWorker) return;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // Có bản mới → skip waiting rồi reload
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-          });
-        });
-      })
-      .catch(err => console.warn('SW failed:', err));
+(async function () {
+  if (!('serviceWorker' in navigator)) return;
 
-    // Khi SW controller thay đổi (sau skip waiting) → reload trang lấy file mới
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
+  // Hủy toàn bộ SW cũ (kể cả sw.js cũ)
+  const regs = await navigator.serviceWorker.getRegistrations();
+  for (const reg of regs) {
+    if (!reg.active?.scriptURL?.includes('sw2.js')) {
+      await reg.unregister();
+    }
+  }
+
+  // Xóa toàn bộ cache cũ
+  const keys = await caches.keys();
+  await Promise.all(keys.filter(k => !k.includes('app-cache-v2')).map(k => caches.delete(k)));
+
+  // Đăng ký SW mới
+  const reg = await navigator.serviceWorker.register('/sw2.js');
+  reg.update();
+
+  // Khi có SW mới → activate ngay
+  reg.addEventListener('updatefound', () => {
+    const w = reg.installing;
+    if (!w) return;
+    w.addEventListener('statechange', () => {
+      if (w.state === 'installed' && navigator.serviceWorker.controller) {
+        w.postMessage({ type: 'SKIP_WAITING' });
       }
     });
   });
-}
+
+  // Sau khi SW mới activate → reload lấy file mới
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) { refreshing = true; window.location.reload(); }
+  });
+})();
