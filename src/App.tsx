@@ -656,7 +656,7 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation (Mobile) */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-brand-border z-50 md:hidden pb-safe">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-brand-border z-50 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex items-center justify-around h-16">
           <Tabs defaultValue="result" className="w-full flex h-full" value={currentResult ? "result" : "history"} onValueChange={() => {}}>
             <button className="flex flex-col items-center justify-center w-full h-full space-y-1 text-brand-blue group cursor-pointer" onClick={() => { window.scrollTo({top: 0, behavior: 'smooth'}); }}>
