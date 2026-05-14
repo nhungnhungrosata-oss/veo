@@ -671,61 +671,13 @@ export default function App() {
             <span className="text-[11px] font-bold text-brand-yellow">Tạo kịch bản</span>
           </button>
 
-          {/* Veo 3 */}
+          {/* Tạo mới */}
           <button
             className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer"
-            onClick={() => {
-              const url = 'https://labs.google/fx/tools/flow';
-              const isAndroid = /android/i.test(navigator.userAgent);
-              if (isAndroid) {
-                window.location.href = `intent://${url.replace('https://', '')}#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`;
-              } else {
-                // iOS PWA + desktop: window.open mở Safari/tab mới, không ghi đè PWA
-                window.open(url, '_blank');
-              }
-            }}
+            onClick={handleNewScript}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" strokeWidth="2.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-            <span className="text-[11px] font-medium">Mở Veo 3</span>
-          </button>
-
-          {/* Grok */}
-          <button
-            className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer"
-            onClick={() => {
-              const isAndroid = /android/i.test(navigator.userAgent);
-              const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-              if (isAndroid) {
-                // Thử mở app Grok — KHÔNG dùng browser_fallback_url (gây bug redirect khi quay lại)
-                window.location.href = 'intent://grok#Intent;scheme=grok;package=ai.x.grok;end';
-                // Nếu sau 2s trang vẫn hiện (app chưa cài) → mở Play Store bằng intent (không đè PWA)
-                const timer = setTimeout(() => {
-                  window.location.href = 'intent://details?id=ai.x.grok#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end';
-                }, 2000);
-                // Nếu app mở được → trang bị ẩn → hủy timer, không redirect nữa
-                const onHide = () => {
-                  if (document.hidden) {
-                    clearTimeout(timer);
-                    document.removeEventListener('visibilitychange', onHide);
-                  }
-                };
-                document.addEventListener('visibilitychange', onHide);
-              } else if (isIOS) {
-                window.location.href = 'grok://';
-                setTimeout(() => {
-                  window.open('https://apps.apple.com/app/grok/id6670324846', '_blank');
-                }, 1500);
-              } else {
-                window.open('https://x.ai/grok', '_blank', 'noopener,noreferrer');
-              }
-            }}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9.5 3L4 12l5.5 9H14l-5.5-9L14 3H9.5zM14.5 3l5.5 9-5.5 9H10l5.5-9L10 3h4.5z"/>
-            </svg>
-            <span className="text-[11px] font-medium">Mở Grok</span>
+            <RefreshCw className="w-[22px] h-[22px] stroke-[2.5px]" />
+            <span className="text-[11px] font-medium">Tạo mới</span>
           </button>
 
         </div>
