@@ -679,7 +679,7 @@ export default function App() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" strokeWidth="2.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="5 3 19 12 5 21 5 3"/>
             </svg>
-            <span className="text-[11px] font-medium">Veo 3</span>
+            <span className="text-[11px] font-medium">Mở Veo 3</span>
           </button>
 
           {/* Grok */}
@@ -722,7 +722,7 @@ export default function App() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
               <path d="M9.5 3L4 12l5.5 9H14l-5.5-9L14 3H9.5zM14.5 3l5.5 9-5.5 9H10l5.5-9L10 3h4.5z"/>
             </svg>
-            <span className="text-[11px] font-medium">Grok</span>
+            <span className="text-[11px] font-medium">Mở Grok</span>
           </button>
 
         </div>
