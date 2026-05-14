@@ -674,7 +674,15 @@ export default function App() {
           {/* Veo 3 */}
           <button
             className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer"
-            onClick={() => window.open('https://labs.google/fx/tools/flow', '_blank')}
+            onClick={() => {
+              const a = document.createElement('a');
+              a.href = 'https://labs.google/fx/tools/flow';
+              a.target = '_blank';
+              a.rel = 'noopener noreferrer';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            }}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" strokeWidth="2.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="5 3 19 12 5 21 5 3"/>
