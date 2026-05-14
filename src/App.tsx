@@ -658,7 +658,12 @@ export default function App() {
       {/* Bottom Navigation (Mobile) */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-brand-border z-50 md:hidden h-16">
         <div className="flex flex-row items-center justify-around w-full h-full">
-          <button className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-blue cursor-pointer" onClick={() => { window.scrollTo({top: 0, behavior: 'smooth'}); }}>
+
+          {/* Tạo kịch bản */}
+          <button
+            className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-blue cursor-pointer"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
             <div className="relative">
               <Sparkles className="w-[22px] h-[22px] stroke-[2.5px]" />
               <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-brand-yellow border-2 border-white"></div>
@@ -666,16 +671,60 @@ export default function App() {
             <span className="text-[11px] font-bold text-brand-yellow">Tạo kịch bản</span>
           </button>
 
-          <button className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer" onClick={() => {
-            const tabsTriggers = document.querySelectorAll('[role="tab"]');
-            tabsTriggers.forEach(t => {
-              if(t.getAttribute("value") === "history") (t as HTMLElement).click();
-            });
-            window.scrollTo({top: 0, behavior: 'smooth'});
-          }}>
-            <History className="w-[22px] h-[22px] stroke-[2.5px]" />
-            <span className="text-[11px] font-medium">Lịch sử</span>
+          {/* Veo 3 */}
+          <button
+            className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer"
+            onClick={() => window.open('https://labs.google/fx/tools/flow', '_blank')}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" strokeWidth="2.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <span className="text-[11px] font-medium">Veo 3</span>
           </button>
+
+          {/* Grok */}
+          <button
+            className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer"
+            onClick={() => {
+              // Thử mở app Grok, nếu không có thì về store
+              const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+              const isAndroid = /android/i.test(navigator.userAgent);
+              const appStoreUrl = isIOS
+                ? 'https://apps.apple.com/app/grok/id6670324846'
+                : 'https://play.google.com/store/apps/details?id=ai.x.grok';
+
+              // Thử deep link, nếu sau 1.5s vẫn ở trang này → chuyển về store
+              let redirected = false;
+              const timer = setTimeout(() => {
+                if (!redirected && !document.hidden) {
+                  window.location.href = appStoreUrl;
+                }
+              }, 1500);
+
+              document.addEventListener('visibilitychange', function onHide() {
+                if (document.hidden) {
+                  redirected = true;
+                  clearTimeout(timer);
+                  document.removeEventListener('visibilitychange', onHide);
+                }
+              });
+
+              if (isAndroid) {
+                window.location.href = 'intent://grok#Intent;scheme=grok;package=ai.x.grok;end';
+              } else if (isIOS) {
+                window.location.href = 'grok://';
+              } else {
+                clearTimeout(timer);
+                window.open('https://x.ai/grok', '_blank');
+              }
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9.5 3L4 12l5.5 9H14l-5.5-9L14 3H9.5zM14.5 3l5.5 9-5.5 9H10l5.5-9L10 3h4.5z"/>
+            </svg>
+            <span className="text-[11px] font-medium">Grok</span>
+          </button>
+
         </div>
       </nav>
 
