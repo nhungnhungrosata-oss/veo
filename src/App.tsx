@@ -697,13 +697,23 @@ export default function App() {
             onClick={() => {
               const isAndroid = /android/i.test(navigator.userAgent);
               const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-              const fallback = encodeURIComponent('https://play.google.com/store/apps/details?id=ai.x.grok');
               if (isAndroid) {
-                window.location.href = `intent://grok#Intent;scheme=grok;package=ai.x.grok;S.browser_fallback_url=${fallback};end`;
+                // Thử mở app Grok — KHÔNG dùng browser_fallback_url (gây bug redirect khi quay lại)
+                window.location.href = 'intent://grok#Intent;scheme=grok;package=ai.x.grok;end';
+                // Nếu sau 2s trang vẫn hiện (app chưa cài) → mở Play Store bằng intent (không đè PWA)
+                const timer = setTimeout(() => {
+                  window.location.href = 'intent://details?id=ai.x.grok#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end';
+                }, 2000);
+                // Nếu app mở được → trang bị ẩn → hủy timer, không redirect nữa
+                const onHide = () => {
+                  if (document.hidden) {
+                    clearTimeout(timer);
+                    document.removeEventListener('visibilitychange', onHide);
+                  }
+                };
+                document.addEventListener('visibilitychange', onHide);
               } else if (isIOS) {
-                // Thử mở app Grok — iOS tự xử lý, không navigate PWA nếu app có
                 window.location.href = 'grok://';
-                // Fallback: nếu Grok chưa cài → mở App Store trong Safari riêng
                 setTimeout(() => {
                   window.open('https://apps.apple.com/app/grok/id6670324846', '_blank');
                 }, 1500);
