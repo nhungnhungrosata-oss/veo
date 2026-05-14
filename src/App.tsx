@@ -656,28 +656,26 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation (Mobile) */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-brand-border z-50 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="flex items-center justify-around h-16">
-          <Tabs defaultValue="result" className="w-full flex h-full" value={currentResult ? "result" : "history"} onValueChange={() => {}}>
-            <button className="flex flex-col items-center justify-center w-full h-full space-y-1 text-brand-blue group cursor-pointer" onClick={() => { window.scrollTo({top: 0, behavior: 'smooth'}); }}>
-              <div className="relative">
-                <Sparkles className="w-[22px] h-[22px] stroke-[2.5px]" />
-                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-brand-yellow border-2 border-white"></div>
-              </div>
-              <span className="text-[11px] font-bold text-brand-yellow">Tạo kịch bản</span>
-            </button>
-            
-            <button className="flex flex-col items-center justify-center w-full h-full space-y-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer" onClick={() => {
-              const tabsTriggers = document.querySelectorAll('[role="tab"]');
-              tabsTriggers.forEach(t => {
-                if(t.getAttribute("value") === "history") (t as HTMLElement).click();
-              });
-              window.scrollTo({top: 0, behavior: 'smooth'});
-            }}>
-              <History className="w-[22px] h-[22px] stroke-[2.5px]" />
-              <span className="text-[11px] font-medium">Lịch sử</span>
-            </button>
-          </Tabs>
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-brand-border z-50 md:hidden h-16">
+        <div className="flex flex-row items-center justify-around w-full h-full">
+          <button className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-blue cursor-pointer" onClick={() => { window.scrollTo({top: 0, behavior: 'smooth'}); }}>
+            <div className="relative">
+              <Sparkles className="w-[22px] h-[22px] stroke-[2.5px]" />
+              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-brand-yellow border-2 border-white"></div>
+            </div>
+            <span className="text-[11px] font-bold text-brand-yellow">Tạo kịch bản</span>
+          </button>
+
+          <button className="flex flex-col items-center justify-center flex-1 h-full gap-1 text-brand-placeholder hover:text-brand-blue transition-colors cursor-pointer" onClick={() => {
+            const tabsTriggers = document.querySelectorAll('[role="tab"]');
+            tabsTriggers.forEach(t => {
+              if(t.getAttribute("value") === "history") (t as HTMLElement).click();
+            });
+            window.scrollTo({top: 0, behavior: 'smooth'});
+          }}>
+            <History className="w-[22px] h-[22px] stroke-[2.5px]" />
+            <span className="text-[11px] font-medium">Lịch sử</span>
+          </button>
         </div>
       </nav>
 
