@@ -1,9 +1,9 @@
-// ⚠️ QUAN TRỌNG: Mỗi khi deploy mới, tăng version này lên (v3, v4, ...)
-// để SW tự động xóa cache cũ và tải lại toàn bộ assets mới.
 const CACHE_NAME = "app-cache-v2";
-
 const PRECACHE_URLS = [
+  "/",
+  "/index.html",
   "/manifest.json",
+  "/icons/icon-192.png" // Cần tải trước icon mặc định
 ];
 
 self.addEventListener("install", (event) => {
@@ -16,11 +16,10 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
-      // Xoá TẤT CẢ cache cũ không khớp version hiện tại
+      // Xoá cache cũ không khớp version
       return Promise.all(
         cacheNames.map((name) => {
           if (name !== CACHE_NAME) {
-            console.log("[SW] Xóa cache cũ:", name);
             return caches.delete(name);
           }
         })
@@ -34,39 +33,17 @@ self.addEventListener("fetch", (event) => {
   // Bỏ qua các request extension
   if (!(event.request.url.startsWith('http:') || event.request.url.startsWith('https:'))) return;
 
-  const url = new URL(event.request.url);
-
-  // API → Network First (không cache)
-  if (url.pathname.includes('/api/')) {
+  if (event.request.url.includes('/api/')) {
+    // Network First cho API
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))
     );
-    return;
-  }
-
-  // HTML → Network First (QUAN TRỌNG: luôn lấy HTML mới để tránh trang trắng khi deploy mới)
-  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+  } else {
+    // Cache First cho assets tĩnh
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => caches.match(event.request))
+      caches.match(event.request).then((response) => {
+        return response || fetch(event.request).catch(() => caches.match('/index.html'));
+      })
     );
-    return;
   }
-
-  // Assets JS/CSS/images → Cache First với fallback network
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return response;
-      }).catch(() => caches.match('/index.html'));
-    })
-  );
 });
