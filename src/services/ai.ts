@@ -222,7 +222,7 @@ async function callAIText(model: string, prompt: string): Promise<string> {
       return await callOpenAICompat(
         "https://api.deepseek.com/chat/completions",
         DEEPSEEK_KEY,
-        "deepseek-chat",
+        "deepseek-v4-flash",
         [{ role: "user", content: prompt }]
       );
     } catch (err) {
