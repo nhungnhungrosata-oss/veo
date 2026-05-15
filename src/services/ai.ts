@@ -10,8 +10,13 @@ import { v4 as uuidv4 } from "uuid";
 // @ts-ignore
 const E = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {};
 
-const GEMINI_KEYS  = [E.VITE_GEMINI_API_KEY, E.VITE_GEMINI_API_KEY_2]
-  .filter((k): k is string => typeof k === "string" && k.startsWith("AIza"));
+const GEMINI_KEYS  = [
+  E.VITE_GEMINI_API_KEY,
+  E.VITE_GEMINI_API_KEY_2,
+  E.VITE_GEMINI_API_KEY_3,
+  E.VITE_GEMINI_API_KEY_4,
+  E.VITE_GEMINI_API_KEY_5,
+].filter((k): k is string => typeof k === "string" && k.startsWith("AIza"));
 const DEEPSEEK_KEY = E.VITE_DEEPSEEK_API_KEY  as string | undefined;
 const OPENAI_KEY   = E.VITE_OPENAI_API_KEY    as string | undefined;
 
@@ -375,7 +380,7 @@ OUTPUT FORMAT — CHỈ TRẢ VỀ JSON HỢP LỆ:
 QUAN TRỌNG: Phải có đúng ${state.sceneCount} phần tử trong mảng "scenes". Chỉ trả JSON, không thêm bất kỳ text nào khác.`;
 
   // ── Gọi AI sinh kịch bản ──
-  const text = await callAIText("gemini-2.5-pro", prompt);
+  const text = await callAIText("gemini-2.5-flash", prompt);
   if (!text) throw new Error("AI không trả về kết quả. Vui lòng thử lại.");
 
   const data = JSON.parse(text);
