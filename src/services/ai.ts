@@ -153,7 +153,7 @@ Trả về JSON với cấu trúc sau (không thêm text ngoài JSON):
   "emotion": "Cảm xúc/biểu cảm của nhân vật nếu có",
   "props": "Đạo cụ hoặc vật dụng xuất hiện trong ảnh",
   "brand": "Thương hiệu, logo, text hoặc sản phẩm nhận diện được nếu có",
-  "videoDirections": "3 gợi ý góc quay/hành động cho video dựa trên phong cách ảnh này"
+  "videoDirections": "2 gợi ý góc quay/hành động cho video dựa trên phong cách ảnh này"
 }`;
 
   // Thử Gemini vision trước
