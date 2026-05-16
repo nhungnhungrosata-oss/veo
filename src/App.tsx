@@ -7,7 +7,7 @@ import { Toaster } from "./components/ui/sonner";
 import { compressImage } from "./lib/image";
 import { suggestScripts, generateContent } from "./services/ai";
 import { getHistory, saveResult } from "./services/storage";
-import { AppState, GeneratedResult, VoiceType, VideoModelType } from "./types";
+import { AppState, GeneratedResult, VoiceType, VideoModelType, StyleType } from "./types";
 import localforage from "localforage";
 
 import { Button } from "./components/ui/button";
@@ -27,6 +27,7 @@ const INITIAL_STATE: AppState = {
   notes: "",
   sceneCount: 3,
   voice: "Bắc",
+  style: "professional",
   videoModel: "Veo 3",
 };
 
@@ -457,6 +458,27 @@ export default function App() {
                     <SelectItem value="Nam">Giọng Nam</SelectItem>
                   </SelectContent>
                 </Select>
+             </div>
+
+             <div className="col-span-2 space-y-3 mt-2">
+                <Label className="text-sm font-semibold text-brand-text-title">🎨 Phong cách</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { key: "energy" as StyleType, emoji: "🚀", label: "Năng lượng" },
+                    { key: "professional" as StyleType, emoji: "💼", label: "Chuyên nghiệp" },
+                    { key: "gentle" as StyleType, emoji: "☕", label: "Nhẹ nhàng" },
+                    { key: "natural" as StyleType, emoji: "🏡", label: "Tự nhiên" },
+                  ]).map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setState(s => ({ ...s, style: opt.key }))}
+                      className={`min-h-[44px] px-3 py-2.5 rounded-[12px] border-2 text-sm font-medium transition-all text-left flex items-center gap-2 ${state.style === opt.key ? "border-brand-blue bg-brand-bg-sub" : "border-brand-border bg-white hover:border-brand-blue hover:bg-brand-bg-sub"}`}
+                    >
+                      <span className="text-base">{opt.emoji}</span>
+                      <span className="text-brand-text-title font-semibold leading-tight">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
              </div>
 
              <div className="col-span-2 space-y-3 mt-2">
