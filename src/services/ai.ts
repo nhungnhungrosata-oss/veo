@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { AppState, GeneratedResult } from "../types";
+import { AppState, GeneratedResult, StyleType } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
 // ─── ENV KEYS (Vercel Dashboard) ─────────────────────────────────────────────
@@ -145,10 +145,29 @@ const IDENTITY_LOCK =
 
 // ─── VOICE DIRECTION — mô tả giọng nói trong videoPrompt (tiếng Anh) ────────
 const VOICE_DIRECTION: Record<string, string> = {
-  Bắc: "The person is speaking Vietnamese with a clear, standard Northern Vietnamese accent (giọng Bắc Hà Nội). Speech is articulate, well-paced, and natural with a balanced, professional tone. Natural lip movements perfectly synchronized with the speech rhythm.",
-  Nam: "The person is speaking Vietnamese with a clear, standard Southern Vietnamese accent (giọng Nam). Speech is fluid, well-paced, and natural with an approachable, balanced tone. Natural lip movements perfectly synchronized with the speech rhythm.",
-  Trung: "The person is speaking Vietnamese with a clear, intelligible Central Vietnamese accent (giọng Trung phổ thông). Speech is authentic, well-modulated, and natural with an engaging, balanced tone. Natural lip movements perfectly synchronized with the speech rhythm.",
+  Bắc: "The person is speaking Vietnamese with a clear, standard Northern Vietnamese accent (giọng Bắc Hà Nội). Speech is articulate and natural. Natural lip movements perfectly synchronized with the speech rhythm.",
+  Nam: "The person is speaking Vietnamese with a clear, standard Southern Vietnamese accent (giọng Nam). Speech is fluid and natural. Natural lip movements perfectly synchronized with the speech rhythm.",
+  Trung: "The person is speaking Vietnamese with a clear, intelligible Central Vietnamese accent (giọng Trung phổ thông). Speech is authentic and natural. Natural lip movements perfectly synchronized with the speech rhythm.",
 };
+
+// ─── STYLE DIRECTION — mô tả phong cách/năng lượng (tiếng Anh) ──────────────
+const STYLE_DIRECTION: Record<StyleType, string> = {
+  energy:
+    "The overall tone is high-energy, fast-paced, enthusiastic, and vibrant with a persuasive and dynamic delivery.",
+  professional:
+    "The overall tone is professional, confident, authoritative, well-modulated, clear, calm, and trustworthy.",
+  gentle:
+    "The overall tone is soft, warm, emotional, slow-paced, soothing, intimate, and deeply reflective.",
+  natural:
+    "The overall tone is casual, friendly, approachable, relaxed, and perfectly mimics an everyday conversational pattern (non-robotic).",
+};
+
+// ─── Helper: ghép Voice + Style thành chuỗi prompt hoàn chỉnh ───────────────
+function buildVoiceStylePrompt(voice: string, style: StyleType): string {
+  const voicePrompt = VOICE_DIRECTION[voice] ?? VOICE_DIRECTION["Bắc"];
+  const stylePrompt = STYLE_DIRECTION[style] ?? STYLE_DIRECTION["professional"];
+  return `${voicePrompt} ${stylePrompt}`;
+}
 
 // ─── KỸ THUẬT VIDEO — chỉ dùng nội bộ, không hiện tên model cho AI ──────────
 const VIDEO_TECHNIQUE: Record<string, string> = {
@@ -167,7 +186,7 @@ export async function generateContent(
     state.selectedImageIndex !== null &&
     state.images[state.selectedImageIndex] !== undefined;
 
-  // ── Giọng nói ──
+  // ── Giọng nói + Phong cách ──
   const voiceProfile: Record<string, { guidance: string; wps: number; style: string }> = {
     Bắc: {
       guidance: "Giọng Bắc: rõ ràng, chuẩn mực, nhịp nhanh, năng động, dứt khoát",
@@ -187,7 +206,8 @@ export async function generateContent(
   };
 
   const voice = voiceProfile[state.voice] || voiceProfile["Bắc"];
-  const voiceDir = VOICE_DIRECTION[state.voice] || VOICE_DIRECTION["Bắc"];
+  // ── Final Voice+Style prompt — ghép theo công thức: [Accent] + " " + [Style] ──
+  const voiceDir = buildVoiceStylePrompt(state.voice, state.style ?? "professional");
   const minWords = Math.round(modelTimeLimit * voice.wps * 0.75);
   const maxWords = Math.round(modelTimeLimit * voice.wps * 0.95);
   const technique = VIDEO_TECHNIQUE[state.videoModel] || VIDEO_TECHNIQUE["Gork"];
