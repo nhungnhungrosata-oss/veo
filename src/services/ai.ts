@@ -145,9 +145,9 @@ const IDENTITY_LOCK =
 
 // ─── VOICE DIRECTION — mô tả giọng nói trong videoPrompt (tiếng Anh) ────────
 const VOICE_DIRECTION: Record<string, string> = {
-  Bắc: "The person is speaking Vietnamese with a clear Northern Vietnamese accent (giọng Bắc). Speech is crisp, articulate, fast-paced, and energetic with confident tone. Natural lip movements matching quick speech rhythm.",
-  Nam: "The person is speaking Vietnamese with a warm Southern Vietnamese accent (giọng Nam). Speech is slow, gentle, friendly, and relaxed with a soft warm tone. Natural lip movements matching calm, unhurried speech rhythm.",
-  Trung: "The person is speaking Vietnamese with a distinctive Central Vietnamese accent (giọng Trung). Speech is expressive, melodic, heartfelt with natural emotional emphasis. Natural lip movements matching the rhythmic, passionate speech pattern.",
+  Bắc: "The person is speaking Vietnamese with a clear, standard Northern Vietnamese accent (giọng Bắc Hà Nội). Speech is articulate, well-paced, and natural with a balanced, professional tone. Natural lip movements perfectly synchronized with the speech rhythm.",
+  Nam: "The person is speaking Vietnamese with a clear, standard Southern Vietnamese accent (giọng Nam). Speech is fluid, well-paced, and natural with an approachable, balanced tone. Natural lip movements perfectly synchronized with the speech rhythm.",
+  Trung: "The person is speaking Vietnamese with a clear, intelligible Central Vietnamese accent (giọng Trung phổ thông). Speech is authentic, well-modulated, and natural with an engaging, balanced tone. Natural lip movements perfectly synchronized with the speech rhythm.",
 };
 
 // ─── KỸ THUẬT VIDEO — chỉ dùng nội bộ, không hiện tên model cho AI ──────────
