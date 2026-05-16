@@ -3,10 +3,6 @@ import { AppState, GeneratedResult } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
 // ─── ENV KEYS (Vercel Dashboard) ─────────────────────────────────────────────
-// VITE_GEMINI_API_KEY      AIza...   (Gemini - ưu tiên 1, free)
-// VITE_GEMINI_API_KEY_2    AIza...   (Gemini key 2 - free dự phòng)
-// VITE_DEEPSEEK_API_KEY    sk-...    (DeepSeek - dự phòng text)
-// VITE_OPENAI_API_KEY      sk-...    (OpenAI gpt-4o-mini - dự phòng cuối)
 // @ts-ignore
 const E = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {};
 
@@ -84,7 +80,6 @@ async function callOpenAICompat(
 
 // ─── AI TEXT: Gemini (free) → DeepSeek → OpenAI (trả phí) ───────────────────
 async function callAIText(model: string, prompt: string): Promise<string> {
-  // 1. Gemini (free keys)
   if (GEMINI_KEYS.length > 0) {
     try {
       return await callGeminiText(model, prompt);
@@ -94,7 +89,6 @@ async function callAIText(model: string, prompt: string): Promise<string> {
       } else throw err;
     }
   }
-  // 2. DeepSeek
   if (DEEPSEEK_KEY) {
     try {
       return await callOpenAICompat(
@@ -109,7 +103,6 @@ async function callAIText(model: string, prompt: string): Promise<string> {
       } else throw err;
     }
   }
-  // 3. OpenAI (trả phí)
   if (OPENAI_KEY) {
     return await callOpenAICompat(
       "https://api.openai.com/v1/chat/completions",
@@ -146,16 +139,23 @@ Trả về JSON: {"suggestions": ["tiêu đề 1", "tiêu đề 2", "tiêu đề
   return [];
 }
 
-// ─── ĐOẠN MẶC ĐỊNH GIỮ NGUYÊN NHÂN VẬT & BỐI CẢNH (IDENTITY LOCK) ─────────
-const IDENTITY_LOCK_PREFIX =
+// ─── IDENTITY LOCK — giữ nguyên nhân vật & bối cảnh ─────────────────────────
+const IDENTITY_LOCK =
   "Based on the reference image. Same person, same identity, same face, same hairstyle, same outfit, same background, same environment. Maintain 100% character consistency and scene consistency. No morphing, no identity change, no outfit change, no background change.";
 
-// ─── KỸ THUẬT VIDEO THEO MODEL ───────────────────────────────────────────────
+// ─── VOICE DIRECTION — mô tả giọng nói trong videoPrompt (tiếng Anh) ────────
+const VOICE_DIRECTION: Record<string, string> = {
+  Bắc: "The person is speaking Vietnamese with a clear Northern Vietnamese accent (giọng Bắc). Speech is crisp, articulate, fast-paced, and energetic with confident tone. Natural lip movements matching quick speech rhythm.",
+  Nam: "The person is speaking Vietnamese with a warm Southern Vietnamese accent (giọng Nam). Speech is slow, gentle, friendly, and relaxed with a soft warm tone. Natural lip movements matching calm, unhurried speech rhythm.",
+  Trung: "The person is speaking Vietnamese with a distinctive Central Vietnamese accent (giọng Trung). Speech is expressive, melodic, heartfelt with natural emotional emphasis. Natural lip movements matching the rhythmic, passionate speech pattern.",
+};
+
+// ─── KỸ THUẬT VIDEO — chỉ dùng nội bộ, không hiện tên model cho AI ──────────
 const VIDEO_TECHNIQUE: Record<string, string> = {
   "Veo 3":
     "Static camera, locked shot, no zoom, no pan unless specified. Natural lip sync with speech, subtle facial micro-expressions, natural eye blinking every 3-4 seconds, gentle realistic head movements. Cinematic shallow depth of field, film grain. No text overlay, no watermark, no scene transition within single clip. Photorealistic rendering.",
   Gork:
-    "Static camera, locked shot, no zoom, no pan unless specified. The person is speaking naturally to camera, natural lip sync, realistic mouth movements matching speech rhythm, subtle head tilts, natural eye blinking, relaxed authentic facial expressions, gentle hand gestures when emphasizing points. No text overlay, no watermark, no scene transition within single clip. Photorealistic, consistent natural lighting throughout.",
+    "Static camera, locked shot, no zoom, no pan unless specified. Natural lip sync, realistic mouth movements matching speech rhythm, subtle head tilts, natural eye blinking, relaxed authentic facial expressions, gentle hand gestures when emphasizing points. No text overlay, no watermark, no scene transition within single clip. Photorealistic, consistent natural lighting throughout.",
 };
 
 // ─── SINH KỊCH BẢN CHÍNH ─────────────────────────────────────────────────────
@@ -167,17 +167,17 @@ export async function generateContent(
     state.selectedImageIndex !== null &&
     state.images[state.selectedImageIndex] !== undefined;
 
-  // ── Giọng nói — phân tích kỹ ──
+  // ── Giọng nói ──
   const voiceProfile: Record<string, { guidance: string; wps: number; style: string }> = {
     Bắc: {
       guidance: "Giọng Bắc: rõ ràng, chuẩn mực, nhịp nhanh, năng động, dứt khoát",
       wps: 4,
-      style: "Câu ngắn, dứt khoát, tiết tấu nhanh. Dùng từ ngữ miền Bắc tự nhiên. Ví dụ: 'ấy', 'nhỉ', 'cơ', 'đấy', 'thế nào'. Không dùng từ miền Nam.",
+      style: "Câu ngắn, dứt khoát, tiết tấu nhanh. Dùng từ ngữ miền Bắc tự nhiên. Ví dụ: 'ấy', 'nhỉ', 'cơ', 'đấy', 'thế nào'. KHÔNG dùng từ miền Nam.",
     },
     Nam: {
       guidance: "Giọng Nam: ấm áp, gần gũi, nhẹ nhàng, chậm rãi, thân thiện",
       wps: 3,
-      style: "Câu dài hơn, nhẹ nhàng, thân thiện. Dùng từ ngữ miền Nam tự nhiên. Ví dụ: 'nha', 'hen', 'nghen', 'á', 'nè', 'đó', 'vậy đó'. Không dùng từ miền Bắc.",
+      style: "Câu dài hơn, nhẹ nhàng, thân thiện. Dùng từ ngữ miền Nam tự nhiên. Ví dụ: 'nha', 'hen', 'nghen', 'á', 'nè', 'đó', 'vậy đó'. KHÔNG dùng từ miền Bắc.",
     },
     Trung: {
       guidance: "Giọng Trung: truyền cảm, đặc sắc, nhấn nhá rõ ràng",
@@ -187,77 +187,92 @@ export async function generateContent(
   };
 
   const voice = voiceProfile[state.voice] || voiceProfile["Bắc"];
+  const voiceDir = VOICE_DIRECTION[state.voice] || VOICE_DIRECTION["Bắc"];
   const minWords = Math.round(modelTimeLimit * voice.wps * 0.75);
   const maxWords = Math.round(modelTimeLimit * voice.wps * 0.95);
   const technique = VIDEO_TECHNIQUE[state.videoModel] || VIDEO_TECHNIQUE["Gork"];
 
-  // ── Prompt chính ──
+  // ── Prefix bắt buộc cho mỗi videoPrompt ──
+  const promptPrefix = hasRefImage
+    ? `${IDENTITY_LOCK} ${voiceDir}`
+    : voiceDir;
+
+  // ── Prompt chính — KHÔNG đề cập tên model (Gork/Veo 3) trong nội dung ──
   const prompt = `Bạn là chuyên gia viết kịch bản video ngắn viral cho TikTok/Reels/Shorts, chuyên xây dựng thương hiệu cá nhân.
 
-=== NHIỆM VỤ ===
-Phân tích KỸ tất cả dữ liệu đầu vào, sau đó sinh kịch bản video chất lượng cao nhất.
+=== CẢNH BÁO QUAN TRỌNG ===
+⛔ TUYỆT ĐỐI KHÔNG được nhắc đến tên bất kỳ công cụ, phần mềm, nền tảng tạo video, hoặc AI nào trong lời thoại (voiceScript), hook, hashtag, thumbnailTexts.
+⛔ KHÔNG viết những câu kiểu "Follow [tên gì đó]", "Theo dõi [tên gì đó]" trừ khi người dùng YÊU CẦU RÕ RÀNG trong phần điều khiển AI.
+⛔ Nội dung lời thoại CHỈ tập trung vào chủ đề/thông điệp mà người dùng cung cấp, không quảng cáo bất kỳ thứ gì khác.
+============================
 
 === DỮ LIỆU ĐẦU VÀO ===
 📝 Nội dung chính: "${state.content}"
 🎛️ Điều khiển AI: "${state.notes || "Không có — tự do sáng tạo phù hợp nội dung"}"
 🎬 Số cảnh: ${state.sceneCount}
 🎙️ Giọng: ${state.voice} → ${voice.guidance}
-📹 Model: ${state.videoModel} — ${modelTimeLimit}s/cảnh
-🖼️ Ảnh tham chiếu: ${hasRefImage ? "CÓ (người dùng đính kèm ảnh khi tạo video trên ${state.videoModel})" : "KHÔNG CÓ"}
+⏱️ Thời lượng mỗi cảnh: ${modelTimeLimit} giây
+🖼️ Có ảnh tham chiếu: ${hasRefImage ? "CÓ (người dùng sẽ đính kèm ảnh gốc khi tạo video)" : "KHÔNG CÓ"}
 =========================
 
-=== BƯỚC 1: PHÂN TÍCH (thực hiện trong đầu trước khi viết) ===
-A. NỘI DUNG: Thông điệp cốt lõi? Ai là đối tượng xem? Cảm xúc muốn truyền tải?
-B. ĐIỀU KHIỂN AI: Có yêu cầu đặc biệt về style/cảm xúc/hành động không? → Nếu CÓ: tuân thủ tuyệt đối. Nếu KHÔNG: sáng tạo phù hợp nội dung.
-C. GIỌNG NÓI (QUAN TRỌNG NHẤT cho voiceScript):
+=== PHÂN TÍCH TRƯỚC KHI VIẾT ===
+A. NỘI DUNG: Thông điệp cốt lõi? Đối tượng xem? Cảm xúc muốn truyền tải?
+B. ĐIỀU KHIỂN AI: Có yêu cầu đặc biệt? → CÓ: tuân thủ tuyệt đối. KHÔNG: sáng tạo phù hợp.
+C. GIỌNG NÓI (QUAN TRỌNG NHẤT):
    ${voice.style}
-   Tốc độ: ~${voice.wps} từ/giây → ${modelTimeLimit}s = ${minWords}-${maxWords} từ/cảnh
-D. PHÂN CẢNH: Chia ${state.sceneCount} cảnh logic: Hook → Phát triển → Kết
-E. MODEL VIDEO: ${state.videoModel === "Veo 3" ? "Veo 3 (8s): lip-sync tốt, ưu tiên close-up biểu cảm khuôn mặt" : "Grok (10s): video dài hơn, ưu tiên hành động tự nhiên + biểu cảm rõ ràng"}
-===============================================================
+   Tốc độ nói: ~${voice.wps} từ/giây → ${modelTimeLimit}s = phải từ ${minWords}-${maxWords} từ/cảnh
+D. PHÂN CẢNH: ${state.sceneCount} cảnh logic — Cảnh 1: Hook → Cảnh giữa: Phát triển → Cảnh cuối: Kết luận/CTA
+E. THỜI LƯỢNG: ${modelTimeLimit} giây mỗi cảnh — ${modelTimeLimit === 8 ? "ngắn, cần câu từ súc tích, đi thẳng vào vấn đề" : "dài hơn, có thể mở rộng ý, thêm ví dụ ngắn"}
+=================================
 
-=== BƯỚC 2: QUY TẮC VIDEO PROMPT (tiếng Anh) ===
-${hasRefImage ? `🔒 CÓ ẢNH THAM CHIẾU — IDENTITY LOCK:
-Mỗi videoPrompt BẮT BUỘC mở đầu bằng đoạn sau (COPY NGUYÊN VĂN, không sửa đổi):
-"${IDENTITY_LOCK_PREFIX}"
+=== QUY TẮC VIDEO PROMPT (viết bằng tiếng Anh) ===
 
-Sau đoạn identity lock, MỚI mô tả hành động cụ thể cho cảnh đó.
-→ Người dùng sẽ đính kèm ảnh tham chiếu khi paste prompt vào ${state.videoModel}, nên KHÔNG cần mô tả ngoại hình nhân vật.
+🔊 GIỌNG NÓI (BẮT BUỘC trong mỗi videoPrompt):
+Mỗi videoPrompt PHẢI chứa đoạn mô tả giọng nói sau (COPY NGUYÊN VĂN, không sửa):
+"${voiceDir}"
+
+${hasRefImage ? `🔒 GIỮ NGUYÊN NHÂN VẬT (BẮT BUỘC vì có ảnh tham chiếu):
+Mỗi videoPrompt PHẢI mở đầu bằng đoạn sau (COPY NGUYÊN VĂN, không sửa):
+"${IDENTITY_LOCK}"
+
+→ Thứ tự bắt buộc: IDENTITY LOCK → VOICE DIRECTION → hành động cụ thể cho cảnh
+→ Người dùng sẽ đính kèm ảnh gốc khi tạo video, nên KHÔNG cần mô tả ngoại hình nhân vật
 → Chỉ mô tả: HÀNH ĐỘNG + BIỂU CẢM + GÓC MÁY + ÁNH SÁNG` : `❌ KHÔNG CÓ ẢNH THAM CHIẾU:
-Không mô tả nhân vật cụ thể. Mô tả chung: hành động, bối cảnh, ánh sáng, góc máy.`}
+→ Thứ tự: VOICE DIRECTION → hành động + bối cảnh + ánh sáng + góc máy
+→ Không mô tả nhân vật cụ thể`}
 
-Kỹ thuật bắt buộc (${state.videoModel}):
+Kỹ thuật video bắt buộc:
 ${technique}
 
 Chi tiết hóa:
-- Hành động CỤ THỂ: "slightly leans forward, makes eye contact, nods gently while speaking" ✓ | "talks to camera" ✗
+- Hành động CỤ THỂ: "slightly leans forward, makes direct eye contact, nods gently while speaking" ✓ | "talks to camera" ✗
 - Ánh sáng CỤ THỂ: "soft warm golden-hour light from the left, gentle fill light" ✓ | "good lighting" ✗  
 - Góc máy CỤ THỂ: "medium close-up, eye-level, shallow depth of field, bokeh background" ✓ | "normal shot" ✗
-- Cảnh 1 nên là close-up/medium close-up để HOOK người xem
-- Nếu nhiều cảnh: biến tấu nhẹ góc máy (close-up → medium → close-up) nhưng KHÔNG đổi bối cảnh/trang phục
+- Cảnh 1: close-up/medium close-up để HOOK
+- Nhiều cảnh: biến tấu nhẹ góc máy nhưng KHÔNG đổi bối cảnh/trang phục
 ====================================================
 
-=== BƯỚC 3: QUY TẮC VOICESCRIPT (tiếng Việt) ===
-1. ${voice.guidance}
+=== QUY TẮC VOICESCRIPT (viết bằng tiếng Việt) ===
+1. 🎙️ ${voice.guidance}
 2. ${voice.style}
-3. GIỐNG NGƯỜI THẬT đang nói chuyện trước camera — KHÔNG giọng MC, KHÔNG giọng đọc sách, KHÔNG giọng robot
-4. Số từ: ${minWords}-${maxWords} từ/cảnh. ĐẾM TỪNG TỪ trước khi output.
-5. Cảnh 1 = HOOK: mở đầu gây tò mò, câu đầu tiên phải giữ chân người xem
-6. Cảnh cuối = KẾT: CTA hoặc kết luận mạnh, để lại ấn tượng
-7. Các cảnh giữa: phát triển nội dung logic, mỗi cảnh 1 ý chính duy nhất
-8. Nếu điều khiển AI yêu cầu → áp dụng vào giọng văn và phong cách nói
-=====================================================
+3. GIỐNG NGƯỜI THẬT nói chuyện trước camera — KHÔNG giọng MC, KHÔNG giọng robot, KHÔNG giọng đọc sách
+4. Số từ BẮT BUỘC: ${minWords}-${maxWords} từ/cảnh (${modelTimeLimit}s × ~${voice.wps} từ/s). ĐẾM TỪNG TỪ trước khi output.
+5. Cảnh 1 = HOOK: câu mở đầu phải gây tò mò, giữ chân người xem ngay lập tức
+6. Cảnh cuối = KẾT: kết luận mạnh mẽ hoặc CTA (kêu gọi hành động liên quan đến NỘI DUNG, KHÔNG kêu gọi follow bất kỳ kênh/app/tool nào trừ khi người dùng yêu cầu trong điều khiển AI)
+7. Các cảnh giữa: phát triển logic, mỗi cảnh 1 ý chính duy nhất
+8. Nếu điều khiển AI có yêu cầu đặc biệt → áp dụng vào giọng văn và phong cách nói
+⛔ NHẮC LẠI: KHÔNG nhắc tên bất kỳ công cụ/phần mềm/nền tảng nào trong lời thoại. Chỉ nói về NỘI DUNG.
+====================================================
 
-=== BƯỚC 4: HOOK & HASHTAG ===
-- Hook: 1 câu tiếng Việt ≤15 từ, gây tò mò ngay lập tức, phù hợp 3s đầu
-- Hashtag: 5 cái, mix trending + niche, bắt đầu bằng #
-===============================
+=== HOOK & HASHTAG ===
+- Hook: 1 câu tiếng Việt ≤15 từ, gây tò mò ngay lập tức, liên quan trực tiếp đến nội dung
+- Hashtag: 5 cái, mix trending + niche, liên quan đến CHỦ ĐỀ nội dung
+=======================
 
-=== BƯỚC 5: THUMBNAIL ===
+=== THUMBNAIL ===
 - 3 biến thể tiêu đề thumbnail tiếng Việt
-- Tối đa 50 ký tự (ngắn = đọc nhanh trên mobile)
-- Gây tò mò, có con số hoặc từ kích thích nếu phù hợp
-==========================
+- Tối đa 50 ký tự, gây tò mò, liên quan đến nội dung
+=================
 
 OUTPUT — CHỈ JSON, KHÔNG TEXT KHÁC:
 {
@@ -265,37 +280,48 @@ OUTPUT — CHỈ JSON, KHÔNG TEXT KHÁC:
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
   "scenes": [
     {
-      "videoPrompt": "${hasRefImage ? IDENTITY_LOCK_PREFIX + " " : ""}[chi tiết hành động, biểu cảm, góc máy, ánh sáng cho cảnh này]",
-      "voiceScript": "Lời thoại tiếng Việt ${minWords}-${maxWords} từ, giọng ${state.voice}"
+      "videoPrompt": "${promptPrefix} [tiếp tục mô tả hành động, biểu cảm, góc máy, ánh sáng cụ thể cho cảnh này]",
+      "voiceScript": "Lời thoại tiếng Việt ${minWords}-${maxWords} từ, giọng ${state.voice}, tự nhiên như người thật"
     }
   ],
   "thumbnailTexts": ["Tiêu đề 1", "Tiêu đề 2", "Tiêu đề 3"]
 }
 
-⚠️ KIỂM TRA CUỐI:
+⚠️ KIỂM TRA CUỐI (bắt buộc trước khi output):
 □ Đúng ${state.sceneCount} scenes?
-□ Mỗi videoPrompt ${hasRefImage ? 'bắt đầu bằng "Based on the reference image..."?' : 'không mô tả nhân vật cụ thể?'}
+□ Mỗi videoPrompt có đoạn voice "${voiceDir.substring(0, 40)}..."?
+${hasRefImage ? '□ Mỗi videoPrompt bắt đầu bằng "Based on the reference image..."?' : '□ Mỗi videoPrompt không mô tả nhân vật cụ thể?'}
 □ Mỗi voiceScript có ${minWords}-${maxWords} từ?
 □ voiceScript đúng giọng ${state.voice} với từ ngữ đặc trưng vùng miền?
+□ KHÔNG có tên công cụ/phần mềm/nền tảng nào trong voiceScript, hook, hashtag, thumbnail?
 □ Không có text/watermark trong videoPrompt?
 □ Chỉ JSON, không text thừa?`;
 
   // ── Gọi AI ──
   console.log(
-    `[AI] Generating: ${state.sceneCount} scenes, ${state.videoModel}, voice=${state.voice}, hasRef=${hasRefImage}`
+    `[AI] Generating: ${state.sceneCount} scenes, model=${state.videoModel}, voice=${state.voice}, time=${modelTimeLimit}s, hasRef=${hasRefImage}`
   );
   const text = await callAIText("gemini-2.5-flash", prompt);
   if (!text) throw new Error("AI không trả về kết quả. Vui lòng thử lại.");
 
   const data = JSON.parse(text);
 
-  // ── Safety: đảm bảo identity lock luôn có nếu có ảnh tham chiếu ──
-  if (hasRefImage && Array.isArray(data.scenes)) {
+  // ── Safety: đảm bảo mỗi videoPrompt luôn có identity lock + voice direction ──
+  if (Array.isArray(data.scenes)) {
     data.scenes = data.scenes.map((scene: any) => {
-      const vp = (scene.videoPrompt || "").trim();
-      if (!vp.startsWith("Based on the reference image")) {
-        scene.videoPrompt = `${IDENTITY_LOCK_PREFIX} ${vp}`;
+      let vp = (scene.videoPrompt || "").trim();
+
+      // Đảm bảo có voice direction
+      if (!vp.includes("Vietnamese accent") && !vp.includes("giọng")) {
+        vp = `${voiceDir} ${vp}`;
       }
+
+      // Đảm bảo có identity lock nếu có ảnh tham chiếu
+      if (hasRefImage && !vp.startsWith("Based on the reference image")) {
+        vp = `${IDENTITY_LOCK} ${vp}`;
+      }
+
+      scene.videoPrompt = vp;
       return scene;
     });
   }
