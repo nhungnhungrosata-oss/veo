@@ -464,36 +464,55 @@ export default function App() {
                 <Label className="text-sm font-semibold text-brand-text-title">🎨 Phong cách</Label>
                 <div className="grid grid-cols-2 gap-2">
                   {([
-                    { key: "energy" as StyleType, emoji: "🚀", label: "Năng lượng" },
-                    { key: "professional" as StyleType, emoji: "💼", label: "Chuyên nghiệp" },
-                    { key: "gentle" as StyleType, emoji: "☕", label: "Nhẹ nhàng" },
-                    { key: "natural" as StyleType, emoji: "🏡", label: "Tự nhiên" },
-                  ]).map(opt => (
-                    <button
-                      key={opt.key}
-                      onClick={() => setState(s => ({ ...s, style: opt.key }))}
-                      className={`min-h-[44px] px-3 py-2.5 rounded-[12px] border-2 text-sm font-medium transition-all text-left flex items-center gap-2 ${state.style === opt.key ? "border-brand-blue bg-brand-bg-sub" : "border-brand-border bg-white hover:border-brand-blue hover:bg-brand-bg-sub"}`}
-                    >
-                      <span className="text-base">{opt.emoji}</span>
-                      <span className="text-brand-text-title font-semibold leading-tight">{opt.label}</span>
-                    </button>
-                  ))}
+                    { key: "energy" as StyleType, emoji: "🚀", label: "Năng lượng", sublabel: "Sôi nổi" },
+                    { key: "professional" as StyleType, emoji: "💼", label: "Chuyên nghiệp", sublabel: "Uy tín" },
+                    { key: "gentle" as StyleType, emoji: "☕", label: "Nhẹ nhàng", sublabel: "Kể chuyện" },
+                    { key: "natural" as StyleType, emoji: "🏡", label: "Tự nhiên", sublabel: "Đời thường" },
+                  ]).map(opt => {
+                    const isActive = state.style === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        onClick={() => setState(s => ({ ...s, style: opt.key }))}
+                        className={`relative min-h-[56px] px-3 py-2.5 rounded-[12px] border-2 text-sm font-medium transition-all duration-200 text-left flex items-center gap-2.5 overflow-hidden active:scale-[0.97] ${isActive ? "border-brand-blue bg-brand-blue shadow-[0_4px_14px_rgba(14,165,233,0.45)] scale-[1.02]" : "border-brand-border bg-white hover:border-brand-blue/60 hover:bg-sky-50"}`}
+                      >
+                        <span className="text-xl leading-none shrink-0">{opt.emoji}</span>
+                        <span className="flex flex-col gap-0.5 min-w-0">
+                          <span className={`font-bold text-[13px] leading-tight ${isActive ? "text-white" : "text-brand-text-title"}`}>{opt.label}</span>
+                          <span className={`text-[10px] leading-tight font-medium ${isActive ? "text-white/75" : "text-brand-text-muted"}`}>{opt.sublabel}</span>
+                        </span>
+                        {isActive && (
+                          <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0">
+                            <Check className="w-2.5 h-2.5 text-brand-blue stroke-[3]" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
              </div>
 
              <div className="col-span-2 space-y-3 mt-2">
                 <Label className="text-sm font-semibold text-brand-text-title">Model Video (Thời lượng)</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(["Veo 3", "Gork"] as VideoModelType[]).map(v => (
-                    <button 
-                      key={v}
-                      onClick={() => setState(s => ({ ...s, videoModel: v }))}
-                      className={`min-h-[44px] px-4 py-3 rounded-[12px] border-2 text-sm font-medium transition-all text-left flex flex-col gap-1 ${state.videoModel === v ? 'border-brand-blue bg-brand-bg-sub' : 'border-brand-border bg-white hover:border-brand-blue hover:bg-brand-bg-sub'}`}
-                    >
-                      <span className="text-brand-text-title font-bold">{v}</span>
-                      <span className="text-xs text-brand-text-muted font-normal">Video {v === 'Veo 3' ? '8' : '10'} giây</span>
-                    </button>
-                  ))}
+                  {(["Veo 3", "Gork"] as VideoModelType[]).map(v => {
+                    const isActive = state.videoModel === v;
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => setState(s => ({ ...s, videoModel: v }))}
+                        className={`relative min-h-[56px] px-4 py-3 rounded-[12px] border-2 text-sm font-medium transition-all duration-200 text-left flex flex-col gap-0.5 overflow-hidden active:scale-[0.97] ${isActive ? "border-brand-blue bg-brand-blue shadow-[0_4px_14px_rgba(14,165,233,0.45)] scale-[1.02]" : "border-brand-border bg-white hover:border-brand-blue/60 hover:bg-sky-50"}`}
+                      >
+                        <span className={`font-bold text-[14px] leading-tight ${isActive ? "text-white" : "text-brand-text-title"}`}>{v}</span>
+                        <span className={`text-[11px] font-medium ${isActive ? "text-white/75" : "text-brand-text-muted"}`}>Video {v === "Veo 3" ? "8" : "10"} giây</span>
+                        {isActive && (
+                          <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-sm">
+                            <Check className="w-2.5 h-2.5 text-brand-blue stroke-[3]" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
              </div>
           </section>
