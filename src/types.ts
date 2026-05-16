@@ -1,5 +1,6 @@
 export type VoiceType = "Bắc" | "Trung" | "Nam";
 export type VideoModelType = "Veo 3" | "Gork";
+export type StyleType = "energy" | "professional" | "gentle" | "natural";
 
 export interface AppState {
   images: string[];
@@ -8,6 +9,7 @@ export interface AppState {
   notes: string;
   sceneCount: number;
   voice: VoiceType;
+  style: StyleType;
   videoModel: VideoModelType;
 }
 
