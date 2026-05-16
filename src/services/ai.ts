@@ -3,22 +3,22 @@ import { AppState, GeneratedResult } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
 // ─── ENV KEYS (Vercel Dashboard) ─────────────────────────────────────────────
-// VITE_GEMINI_API_KEY      AIza...   (Gemini - ưu tiên 1, hỗ trợ vision)
-// VITE_GEMINI_API_KEY_2    AIza...   (Gemini key 2 - tuỳ chọn)
-// VITE_DEEPSEEK_API_KEY    sk-...    (DeepSeek - dự phòng text, không có vision)
-// VITE_OPENAI_API_KEY      sk-...    (OpenAI gpt-4o-mini - dự phòng, có vision)
+// VITE_GEMINI_API_KEY      AIza...   (Gemini - ưu tiên 1, free)
+// VITE_GEMINI_API_KEY_2    AIza...   (Gemini key 2 - free dự phòng)
+// VITE_DEEPSEEK_API_KEY    sk-...    (DeepSeek - dự phòng text)
+// VITE_OPENAI_API_KEY      sk-...    (OpenAI gpt-4o-mini - dự phòng cuối)
 // @ts-ignore
 const E = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {};
 
-const GEMINI_KEYS  = [
+const GEMINI_KEYS = [
   E.VITE_GEMINI_API_KEY,
   E.VITE_GEMINI_API_KEY_2,
   E.VITE_GEMINI_API_KEY_3,
   E.VITE_GEMINI_API_KEY_4,
   E.VITE_GEMINI_API_KEY_5,
 ].filter((k): k is string => typeof k === "string" && k.startsWith("AIza"));
-const DEEPSEEK_KEY = E.VITE_DEEPSEEK_API_KEY  as string | undefined;
-const OPENAI_KEY   = E.VITE_OPENAI_API_KEY    as string | undefined;
+const DEEPSEEK_KEY = E.VITE_DEEPSEEK_API_KEY as string | undefined;
+const OPENAI_KEY = E.VITE_OPENAI_API_KEY as string | undefined;
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 const isQuotaError = (err: any): boolean =>
@@ -26,13 +26,6 @@ const isQuotaError = (err: any): boolean =>
   String(err?.message).includes("429") ||
   String(err?.message).includes("quota") ||
   String(err?.message).includes("rate_limit");
-
-/** Tách base64 và mimeType từ data URL */
-function parseDataUrl(dataUrl: string): { mimeType: string; base64: string } | null {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) return null;
-  return { mimeType: match[1], base64: match[2] };
-}
 
 // ─── GEMINI CALLER ───────────────────────────────────────────────────────────
 async function callGeminiText(model: string, prompt: string): Promise<string> {
@@ -49,44 +42,10 @@ async function callGeminiText(model: string, prompt: string): Promise<string> {
       throw new Error("Empty response");
     } catch (err: any) {
       lastErr = err;
-      if (isQuotaError(err)) { console.warn("[AI] Gemini key hết quota → thử key tiếp"); continue; }
-      throw err;
-    }
-  }
-  throw lastErr;
-}
-
-/** Gọi Gemini với ảnh (multimodal) + JSON output */
-async function callGeminiVision(
-  model: string,
-  imageDataUrl: string,
-  prompt: string
-): Promise<string> {
-  const parsed = parseDataUrl(imageDataUrl);
-  if (!parsed) throw new Error("Ảnh không hợp lệ");
-
-  let lastErr: any;
-  for (const key of GEMINI_KEYS) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: key });
-      const res = await ai.models.generateContent({
-        model,
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { inlineData: { mimeType: parsed.mimeType as any, data: parsed.base64 } },
-              { text: prompt },
-            ],
-          },
-        ],
-        config: { responseMimeType: "application/json" },
-      });
-      if (res.text) return res.text;
-      throw new Error("Empty response");
-    } catch (err: any) {
-      lastErr = err;
-      if (isQuotaError(err)) { console.warn("[AI] Gemini vision key hết quota → thử tiếp"); continue; }
+      if (isQuotaError(err)) {
+        console.warn("[AI] Gemini key hết quota → thử key tiếp");
+        continue;
+      }
       throw err;
     }
   }
@@ -102,8 +61,16 @@ async function callOpenAICompat(
 ): Promise<string> {
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, messages, response_format: { type: "json_object" }, temperature: 0.7 }),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+    }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -115,110 +82,16 @@ async function callOpenAICompat(
   return data.choices?.[0]?.message?.content ?? "";
 }
 
-/** OpenAI vision: gpt-4o-mini hỗ trợ image */
-async function callOpenAIVision(imageDataUrl: string, prompt: string): Promise<string> {
-  if (!OPENAI_KEY) throw new Error("Không có OPENAI key");
-  return callOpenAICompat(
-    "https://api.openai.com/v1/chat/completions",
-    OPENAI_KEY,
-    "gpt-4o-mini",
-    [
-      {
-        role: "user",
-        content: [
-          { type: "image_url", image_url: { url: imageDataUrl, detail: "high" } },
-          { type: "text", text: prompt },
-        ],
-      },
-    ]
-  );
-}
-
-// ─── BƯỚC 1: PHÂN TÍCH ẢNH THAM CHIẾU ───────────────────────────────────────
-/**
- * Gemini/OpenAI vision phân tích ảnh → trả về JSON mô tả chi tiết
- * Dùng cho: nhân vật, trang phục, bối cảnh, màu sắc, phong cách, cảm xúc, đạo cụ, thương hiệu
- */
-async function analyzeReferenceImage(imageDataUrl: string): Promise<ImageAnalysis> {
-  const prompt = `Phân tích chi tiết hình ảnh này để dùng làm ảnh tham chiếu cho video ngắn TikTok/Reels.
-Trả về JSON với cấu trúc sau (không thêm text ngoài JSON):
-{
-  "character": "Mô tả nhân vật chính: giới tính, độ tuổi ước tính, ngoại hình nổi bật",
-  "outfit": "Trang phục chi tiết: màu sắc, kiểu dáng, phụ kiện",
-  "background": "Bối cảnh/môi trường phía sau: trong nhà/ngoài trời, địa điểm, không gian",
-  "lighting": "Ánh sáng: tự nhiên/nhân tạo, hướng sáng, màu sắc ánh sáng",
-  "colorPalette": "Bảng màu chủ đạo của toàn bộ hình ảnh",
-  "cameraAngle": "Góc quay: close-up/medium/wide, góc nhìn từ trên/ngang/dưới",
-  "style": "Phong cách tổng thể: professional/casual/luxury/minimalist/creative...",
-  "emotion": "Cảm xúc/biểu cảm của nhân vật nếu có",
-  "props": "Đạo cụ hoặc vật dụng xuất hiện trong ảnh",
-  "brand": "Thương hiệu, logo, text hoặc sản phẩm nhận diện được nếu có",
-  "videoDirections": "2 gợi ý góc quay/hành động cho video dựa trên phong cách ảnh này"
-}`;
-
-  // Thử Gemini vision trước
+// ─── AI TEXT: Gemini (free) → DeepSeek → OpenAI (trả phí) ───────────────────
+async function callAIText(model: string, prompt: string): Promise<string> {
+  // 1. Gemini (free keys)
   if (GEMINI_KEYS.length > 0) {
     try {
-      const text = await callGeminiVision("gemini-2.5-flash", imageDataUrl, prompt);
-      return JSON.parse(text) as ImageAnalysis;
+      return await callGeminiText(model, prompt);
     } catch (err) {
       if (isQuotaError(err)) {
-        console.warn("[AI] Gemini vision hết quota → thử OpenAI vision");
-      } else {
-        console.error("[AI] Gemini vision lỗi:", err);
-      }
-    }
-  }
-
-  // Fallback: OpenAI vision (gpt-4o-mini có vision)
-  if (OPENAI_KEY) {
-    try {
-      const text = await callOpenAIVision(imageDataUrl, prompt);
-      return JSON.parse(text) as ImageAnalysis;
-    } catch (err) {
-      console.error("[AI] OpenAI vision lỗi:", err);
-    }
-  }
-
-  // Không có vision → trả về placeholder để không crash
-  console.warn("[AI] Không có vision provider → bỏ qua phân tích ảnh");
-  return {
-    character: "Nhân vật trong ảnh tham chiếu",
-    outfit: "Trang phục như trong ảnh tham chiếu",
-    background: "Bối cảnh như trong ảnh tham chiếu",
-    lighting: "Ánh sáng tự nhiên",
-    colorPalette: "Màu sắc tự nhiên",
-    cameraAngle: "Medium shot",
-    style: "Professional",
-    emotion: "Tự tin, năng động",
-    props: "",
-    brand: "",
-    videoDirections: "Giữ nguyên style như ảnh tham chiếu",
-  };
-}
-
-interface ImageAnalysis {
-  character: string;
-  outfit: string;
-  background: string;
-  lighting: string;
-  colorPalette: string;
-  cameraAngle: string;
-  style: string;
-  emotion: string;
-  props: string;
-  brand: string;
-  videoDirections: string;
-}
-
-// ─── BƯỚC 2: SINH KỊCH BẢN (có đầy đủ context) ───────────────────────────────
-async function callAIText(model: string, prompt: string): Promise<string> {
-  // 1. Gemini
-  if (GEMINI_KEYS.length > 0) {
-    try { return await callGeminiText(model, prompt); }
-    catch (err) {
-      if (isQuotaError(err)) { console.warn("[AI] Gemini hết quota → DeepSeek"); }
-      else throw err;
+        console.warn("[AI] Gemini hết quota → DeepSeek");
+      } else throw err;
     }
   }
   // 2. DeepSeek
@@ -231,11 +104,12 @@ async function callAIText(model: string, prompt: string): Promise<string> {
         [{ role: "user", content: prompt }]
       );
     } catch (err) {
-      if (isQuotaError(err)) { console.warn("[AI] DeepSeek hết quota → OpenAI"); }
-      else throw err;
+      if (isQuotaError(err)) {
+        console.warn("[AI] DeepSeek hết quota → OpenAI");
+      } else throw err;
     }
   }
-  // 3. OpenAI
+  // 3. OpenAI (trả phí)
   if (OPENAI_KEY) {
     return await callOpenAICompat(
       "https://api.openai.com/v1/chat/completions",
@@ -244,12 +118,17 @@ async function callAIText(model: string, prompt: string): Promise<string> {
       [{ role: "user", content: prompt }]
     );
   }
-  throw new Error("Tất cả API đều hết quota hoặc chưa cấu hình trên Vercel.");
+  throw new Error(
+    "Tất cả API đều hết quota hoặc chưa cấu hình trên Vercel."
+  );
 }
 
 // ─── GỢI Ý TIÊU ĐỀ NHANH ─────────────────────────────────────────────────────
-export async function suggestScripts(contentSnippet: string): Promise<string[]> {
-  if (!contentSnippet || contentSnippet.trim().split(/\s+/).length < 4) return [];
+export async function suggestScripts(
+  contentSnippet: string
+): Promise<string[]> {
+  if (!contentSnippet || contentSnippet.trim().split(/\s+/).length < 4)
+    return [];
 
   const prompt = `Dựa trên nội dung sau, đề xuất 3 tiêu đề viral ngắn gọn cho video TikTok/Reels xây dựng thương hiệu cá nhân.
 Yêu cầu: Mỗi tiêu đề tối đa 20 từ, tiếng Việt, kích thích tò mò.
@@ -267,123 +146,159 @@ Trả về JSON: {"suggestions": ["tiêu đề 1", "tiêu đề 2", "tiêu đề
   return [];
 }
 
+// ─── ĐOẠN MẶC ĐỊNH GIỮ NGUYÊN NHÂN VẬT & BỐI CẢNH (IDENTITY LOCK) ─────────
+const IDENTITY_LOCK_PREFIX =
+  "Based on the reference image. Same person, same identity, same face, same hairstyle, same outfit, same background, same environment. Maintain 100% character consistency and scene consistency. No morphing, no identity change, no outfit change, no background change.";
+
+// ─── KỸ THUẬT VIDEO THEO MODEL ───────────────────────────────────────────────
+const VIDEO_TECHNIQUE: Record<string, string> = {
+  "Veo 3":
+    "Static camera, locked shot, no zoom, no pan unless specified. Natural lip sync with speech, subtle facial micro-expressions, natural eye blinking every 3-4 seconds, gentle realistic head movements. Cinematic shallow depth of field, film grain. No text overlay, no watermark, no scene transition within single clip. Photorealistic rendering.",
+  Gork:
+    "Static camera, locked shot, no zoom, no pan unless specified. The person is speaking naturally to camera, natural lip sync, realistic mouth movements matching speech rhythm, subtle head tilts, natural eye blinking, relaxed authentic facial expressions, gentle hand gestures when emphasizing points. No text overlay, no watermark, no scene transition within single clip. Photorealistic, consistent natural lighting throughout.",
+};
+
 // ─── SINH KỊCH BẢN CHÍNH ─────────────────────────────────────────────────────
-export async function generateContent(state: AppState): Promise<GeneratedResult> {
+export async function generateContent(
+  state: AppState
+): Promise<GeneratedResult> {
   const modelTimeLimit = state.videoModel === "Veo 3" ? 8 : 10;
+  const hasRefImage =
+    state.selectedImageIndex !== null &&
+    state.images[state.selectedImageIndex] !== undefined;
 
-  // ── Lấy ảnh tham chiếu đã chọn ──
-  const refImageDataUrl =
-    state.selectedImageIndex !== null && state.images[state.selectedImageIndex]
-      ? state.images[state.selectedImageIndex]
-      : null;
+  // ── Giọng nói — phân tích kỹ ──
+  const voiceProfile: Record<string, { guidance: string; wps: number; style: string }> = {
+    Bắc: {
+      guidance: "Giọng Bắc: rõ ràng, chuẩn mực, nhịp nhanh, năng động, dứt khoát",
+      wps: 4,
+      style: "Câu ngắn, dứt khoát, tiết tấu nhanh. Dùng từ ngữ miền Bắc tự nhiên. Ví dụ: 'ấy', 'nhỉ', 'cơ', 'đấy', 'thế nào'. Không dùng từ miền Nam.",
+    },
+    Nam: {
+      guidance: "Giọng Nam: ấm áp, gần gũi, nhẹ nhàng, chậm rãi, thân thiện",
+      wps: 3,
+      style: "Câu dài hơn, nhẹ nhàng, thân thiện. Dùng từ ngữ miền Nam tự nhiên. Ví dụ: 'nha', 'hen', 'nghen', 'á', 'nè', 'đó', 'vậy đó'. Không dùng từ miền Bắc.",
+    },
+    Trung: {
+      guidance: "Giọng Trung: truyền cảm, đặc sắc, nhấn nhá rõ ràng",
+      wps: 3.5,
+      style: "Câu có nhấn nhá, truyền cảm. Dùng từ ngữ miền Trung tự nhiên. Ví dụ: 'ni', 'nớ', 'rứa', 'mô', 'chi', 'răng'. Giữ sự chân thành, mộc mạc.",
+    },
+  };
 
-  // ── Bước 1: Phân tích ảnh ──
-  let imgCtx: ImageAnalysis | null = null;
-  if (refImageDataUrl) {
-    console.log("[AI] Bắt đầu phân tích ảnh tham chiếu...");
-    imgCtx = await analyzeReferenceImage(refImageDataUrl);
-    console.log("[AI] Phân tích ảnh hoàn tất:", imgCtx);
-  } else {
-    console.warn("[AI] Không có ảnh tham chiếu → tạo kịch bản không có ảnh");
-  }
+  const voice = voiceProfile[state.voice] || voiceProfile["Bắc"];
+  const minWords = Math.round(modelTimeLimit * voice.wps * 0.75);
+  const maxWords = Math.round(modelTimeLimit * voice.wps * 0.95);
+  const technique = VIDEO_TECHNIQUE[state.videoModel] || VIDEO_TECHNIQUE["Gork"];
 
-  // ── Bước 2: Xây dựng prompt đầy đủ ──
-  const imageContext = imgCtx
-    ? `
-=== PHÂN TÍCH ẢNH THAM CHIẾU ===
-Nhân vật: ${imgCtx.character}
-Trang phục: ${imgCtx.outfit}
-Bối cảnh: ${imgCtx.background}
-Ánh sáng: ${imgCtx.lighting}
-Bảng màu: ${imgCtx.colorPalette}
-Góc quay gốc: ${imgCtx.cameraAngle}
-Phong cách: ${imgCtx.style}
-Cảm xúc nhân vật: ${imgCtx.emotion}
-Đạo cụ: ${imgCtx.props || "Không có"}
-Thương hiệu/Logo: ${imgCtx.brand || "Không nhận diện được"}
-Gợi ý video từ ảnh: ${imgCtx.videoDirections}
-=================================`
-    : `=== KHÔNG CÓ ẢNH THAM CHIẾU ===
-Tạo video prompt phù hợp với nội dung, không mô tả nhân vật cụ thể.
-================================`;
+  // ── Prompt chính ──
+  const prompt = `Bạn là chuyên gia viết kịch bản video ngắn viral cho TikTok/Reels/Shorts, chuyên xây dựng thương hiệu cá nhân.
 
-  const voiceGuidance =
-    state.voice === "Bắc"
-      ? "Giọng Bắc: rõ ràng, chuẩn mực, năng động"
-      : state.voice === "Nam"
-      ? "Giọng Nam: ấm áp, gần gũi, nhẹ nhàng"
-      : "Giọng Trung: truyền cảm, đặc sắc";
+=== NHIỆM VỤ ===
+Phân tích KỸ tất cả dữ liệu đầu vào, sau đó sinh kịch bản video chất lượng cao nhất.
 
-  const prompt = `Bạn là chuyên gia viết kịch bản video ngắn viral cho TikTok/Reels/Shorts, chuyên về xây dựng thương hiệu cá nhân.
+=== DỮ LIỆU ĐẦU VÀO ===
+📝 Nội dung chính: "${state.content}"
+🎛️ Điều khiển AI: "${state.notes || "Không có — tự do sáng tạo phù hợp nội dung"}"
+🎬 Số cảnh: ${state.sceneCount}
+🎙️ Giọng: ${state.voice} → ${voice.guidance}
+📹 Model: ${state.videoModel} — ${modelTimeLimit}s/cảnh
+🖼️ Ảnh tham chiếu: ${hasRefImage ? "CÓ (người dùng đính kèm ảnh khi tạo video trên ${state.videoModel})" : "KHÔNG CÓ"}
+=========================
 
-${imageContext}
+=== BƯỚC 1: PHÂN TÍCH (thực hiện trong đầu trước khi viết) ===
+A. NỘI DUNG: Thông điệp cốt lõi? Ai là đối tượng xem? Cảm xúc muốn truyền tải?
+B. ĐIỀU KHIỂN AI: Có yêu cầu đặc biệt về style/cảm xúc/hành động không? → Nếu CÓ: tuân thủ tuyệt đối. Nếu KHÔNG: sáng tạo phù hợp nội dung.
+C. GIỌNG NÓI (QUAN TRỌNG NHẤT cho voiceScript):
+   ${voice.style}
+   Tốc độ: ~${voice.wps} từ/giây → ${modelTimeLimit}s = ${minWords}-${maxWords} từ/cảnh
+D. PHÂN CẢNH: Chia ${state.sceneCount} cảnh logic: Hook → Phát triển → Kết
+E. MODEL VIDEO: ${state.videoModel === "Veo 3" ? "Veo 3 (8s): lip-sync tốt, ưu tiên close-up biểu cảm khuôn mặt" : "Grok (10s): video dài hơn, ưu tiên hành động tự nhiên + biểu cảm rõ ràng"}
+===============================================================
 
-=== DỮ LIỆU ĐẦU VÀO CỦA NGƯỜI DÙNG ===
-Tiêu đề / Nội dung chính: "${state.content}"
-Điều khiển AI (style, cảm xúc, hành động...): "${state.notes || "Không có yêu cầu đặc biệt"}"
-Số cảnh quay: ${state.sceneCount}
-Giọng đọc: ${state.voice} (${voiceGuidance})
-Model video / Thời lượng: ${state.videoModel} — ${modelTimeLimit} giây mỗi cảnh
-======================================
+=== BƯỚC 2: QUY TẮC VIDEO PROMPT (tiếng Anh) ===
+${hasRefImage ? `🔒 CÓ ẢNH THAM CHIẾU — IDENTITY LOCK:
+Mỗi videoPrompt BẮT BUỘC mở đầu bằng đoạn sau (COPY NGUYÊN VĂN, không sửa đổi):
+"${IDENTITY_LOCK_PREFIX}"
 
-=== QUY TẮC TẠO VIDEO PROMPT (bắt buộc tuân thủ) ===
-${imgCtx ? `
-1. NHÂN VẬT: Luôn mô tả nhân vật ĐÚNG với ảnh tham chiếu:
-   - Ngoại hình: ${imgCtx.character}
-   - Trang phục: ${imgCtx.outfit}
-   - Cảm xúc: phù hợp với nội dung từng cảnh, giữ nét ${imgCtx.emotion}
-2. BỐI CẢNH: Ưu tiên giữ bối cảnh gốc (${imgCtx.background}) hoặc mở rộng phù hợp nội dung
-3. MÀU SẮC & ÁNH SÁNG: Duy trì tông màu ${imgCtx.colorPalette}, ánh sáng ${imgCtx.lighting}
-4. GÓC QUAY: Biến tấu hợp lý từ góc gốc (${imgCtx.cameraAngle}): close-up cảm xúc, medium shot hành động
-5. PHONG CÁCH: Nhất quán ${imgCtx.style} xuyên suốt tất cả cảnh` : `
-1. Không mô tả nhân vật cụ thể (không có ảnh tham chiếu)
-2. Tập trung vào hành động, bối cảnh, ánh sáng chung chung`}
-6. TUYỆT ĐỐI KHÔNG: chữ/text trên video, chuyển cảnh trong 1 prompt, thay đổi nhân vật giữa các cảnh
-7. Hành động phải thực tế, tự nhiên như người thật
-8. Video prompt viết bằng TIẾNG ANH, chi tiết và cụ thể
+Sau đoạn identity lock, MỚI mô tả hành động cụ thể cho cảnh đó.
+→ Người dùng sẽ đính kèm ảnh tham chiếu khi paste prompt vào ${state.videoModel}, nên KHÔNG cần mô tả ngoại hình nhân vật.
+→ Chỉ mô tả: HÀNH ĐỘNG + BIỂU CẢM + GÓC MÁY + ÁNH SÁNG` : `❌ KHÔNG CÓ ẢNH THAM CHIẾU:
+Không mô tả nhân vật cụ thể. Mô tả chung: hành động, bối cảnh, ánh sáng, góc máy.`}
+
+Kỹ thuật bắt buộc (${state.videoModel}):
+${technique}
+
+Chi tiết hóa:
+- Hành động CỤ THỂ: "slightly leans forward, makes eye contact, nods gently while speaking" ✓ | "talks to camera" ✗
+- Ánh sáng CỤ THỂ: "soft warm golden-hour light from the left, gentle fill light" ✓ | "good lighting" ✗  
+- Góc máy CỤ THỂ: "medium close-up, eye-level, shallow depth of field, bokeh background" ✓ | "normal shot" ✗
+- Cảnh 1 nên là close-up/medium close-up để HOOK người xem
+- Nếu nhiều cảnh: biến tấu nhẹ góc máy (close-up → medium → close-up) nhưng KHÔNG đổi bối cảnh/trang phục
+====================================================
+
+=== BƯỚC 3: QUY TẮC VOICESCRIPT (tiếng Việt) ===
+1. ${voice.guidance}
+2. ${voice.style}
+3. GIỐNG NGƯỜI THẬT đang nói chuyện trước camera — KHÔNG giọng MC, KHÔNG giọng đọc sách, KHÔNG giọng robot
+4. Số từ: ${minWords}-${maxWords} từ/cảnh. ĐẾM TỪNG TỪ trước khi output.
+5. Cảnh 1 = HOOK: mở đầu gây tò mò, câu đầu tiên phải giữ chân người xem
+6. Cảnh cuối = KẾT: CTA hoặc kết luận mạnh, để lại ấn tượng
+7. Các cảnh giữa: phát triển nội dung logic, mỗi cảnh 1 ý chính duy nhất
+8. Nếu điều khiển AI yêu cầu → áp dụng vào giọng văn và phong cách nói
 =====================================================
 
-=== QUY TẮC LỜI THOẠI (voiceScript) ===
-1. Viết bằng TIẾNG VIỆT, ${voiceGuidance}
-2. Tự nhiên như người thật đang nói chuyện với camera
-3. ${modelTimeLimit === 8
-  ? `Giới hạn ${modelTimeLimit}s: PHẢI từ 20-24 từ mỗi cảnh. Đếm từ nội tâm trước khi viết.`
-  : `Giới hạn ${modelTimeLimit}s: PHẢI từ 24-28 từ mỗi cảnh. Đếm từ nội tâm trước khi viết.`}
-4. Không vượt giới hạn từ. Câu ngắn, dễ đọc, cảm xúc thật
-5. Phù hợp với style và điều khiển AI: "${state.notes || "tự nhiên, chân thực"}"
-========================================
-
-=== QUY TẮC HOOK & HASHTAG ===
-1. Hook: 1 câu viral tiếng Việt, giữ người xem ngay 3 giây đầu
-2. Hashtag: 5 hashtag liên quan (bắt đầu bằng #)
+=== BƯỚC 4: HOOK & HASHTAG ===
+- Hook: 1 câu tiếng Việt ≤15 từ, gây tò mò ngay lập tức, phù hợp 3s đầu
+- Hashtag: 5 cái, mix trending + niche, bắt đầu bằng #
 ===============================
 
-=== QUY TẮC THUMBNAIL ===
-1. 3 biến thể tiêu đề thumbnail tiếng Việt
-2. Tối đa 80 ký tự mỗi tiêu đề
-3. Ngắn gọn, viral, gây tò mò, phù hợp mobile
+=== BƯỚC 5: THUMBNAIL ===
+- 3 biến thể tiêu đề thumbnail tiếng Việt
+- Tối đa 50 ký tự (ngắn = đọc nhanh trên mobile)
+- Gây tò mò, có con số hoặc từ kích thích nếu phù hợp
 ==========================
 
-OUTPUT FORMAT — CHỈ TRẢ VỀ JSON HỢP LỆ:
+OUTPUT — CHỈ JSON, KHÔNG TEXT KHÁC:
 {
-  "hook": "câu hook tiếng Việt",
+  "hook": "câu hook tiếng Việt ≤15 từ",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
   "scenes": [
     {
-      "videoPrompt": "English: detailed visual description consistent with reference image...",
-      "voiceScript": "Tiếng Việt: lời thoại tự nhiên..."
+      "videoPrompt": "${hasRefImage ? IDENTITY_LOCK_PREFIX + " " : ""}[chi tiết hành động, biểu cảm, góc máy, ánh sáng cho cảnh này]",
+      "voiceScript": "Lời thoại tiếng Việt ${minWords}-${maxWords} từ, giọng ${state.voice}"
     }
   ],
   "thumbnailTexts": ["Tiêu đề 1", "Tiêu đề 2", "Tiêu đề 3"]
 }
 
-QUAN TRỌNG: Phải có đúng ${state.sceneCount} phần tử trong mảng "scenes". Chỉ trả JSON, không thêm bất kỳ text nào khác.`;
+⚠️ KIỂM TRA CUỐI:
+□ Đúng ${state.sceneCount} scenes?
+□ Mỗi videoPrompt ${hasRefImage ? 'bắt đầu bằng "Based on the reference image..."?' : 'không mô tả nhân vật cụ thể?'}
+□ Mỗi voiceScript có ${minWords}-${maxWords} từ?
+□ voiceScript đúng giọng ${state.voice} với từ ngữ đặc trưng vùng miền?
+□ Không có text/watermark trong videoPrompt?
+□ Chỉ JSON, không text thừa?`;
 
-  // ── Gọi AI sinh kịch bản ──
+  // ── Gọi AI ──
+  console.log(
+    `[AI] Generating: ${state.sceneCount} scenes, ${state.videoModel}, voice=${state.voice}, hasRef=${hasRefImage}`
+  );
   const text = await callAIText("gemini-2.5-flash", prompt);
   if (!text) throw new Error("AI không trả về kết quả. Vui lòng thử lại.");
 
   const data = JSON.parse(text);
+
+  // ── Safety: đảm bảo identity lock luôn có nếu có ảnh tham chiếu ──
+  if (hasRefImage && Array.isArray(data.scenes)) {
+    data.scenes = data.scenes.map((scene: any) => {
+      const vp = (scene.videoPrompt || "").trim();
+      if (!vp.startsWith("Based on the reference image")) {
+        scene.videoPrompt = `${IDENTITY_LOCK_PREFIX} ${vp}`;
+      }
+      return scene;
+    });
+  }
 
   const thumbnailStyles = [
     "bg-black/70 backdrop-blur-md text-white rounded-[16px] px-5 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.5)] border border-white/20 font-title font-bold uppercase tracking-tight",
