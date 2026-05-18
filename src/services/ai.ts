@@ -123,10 +123,10 @@ export async function suggestScripts(
   if (!contentSnippet || contentSnippet.trim().split(/\s+/).length < 4)
     return [];
 
-  const prompt = `Dựa trên nội dung sau, đề xuất 3 tiêu đề viral ngắn gọn cho video TikTok/Reels xây dựng thương hiệu cá nhân.
+  const prompt = `Dựa trên nội dung sau, đề xuất 2 tiêu đề viral ngắn gọn cho video TikTok/Reels xây dựng thương hiệu cá nhân.
 Yêu cầu: Mỗi tiêu đề tối đa 20 từ, tiếng Việt, kích thích tò mò.
 Nội dung: "${contentSnippet}"
-Trả về JSON: {"suggestions": ["tiêu đề 1", "tiêu đề 2", "tiêu đề 3"]}`;
+Trả về JSON: {"suggestions": ["tiêu đề 1", "tiêu đề 2"]}`;
 
   try {
     const text = await callAIText("gemini-2.5-flash", prompt);
