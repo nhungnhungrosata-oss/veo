@@ -98,6 +98,8 @@
     <div class="mb-4">
       <label class="font-semibold mr-2 text-sm">Model mặc định:</label>
       <select id="model-deepseek" class="px-3 py-2 border border-brand-border rounded-lg text-sm bg-slate-50" onchange="updateModel('deepseek', this.value)">
+        <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+        <option value="deepseek-v4-pro">deepseek-v4-pro</option>
         <option value="deepseek-chat">deepseek-chat</option>
         <option value="deepseek-reasoner">deepseek-reasoner</option>
       </select>
@@ -157,7 +159,7 @@
     let apiConfig = {
       google: { keys: [], currentIndex: 0, model: "gemini-1.5-flash" },
       openai: { keys: [], currentIndex: 0, model: "gpt-4o-mini" },
-      deepseek: { keys: [], currentIndex: 0, model: "deepseek-chat" }
+      deepseek: { keys: [], currentIndex: 0, model: "deepseek-v4-flash" }
     };
 
     function loadConfig() {
@@ -311,7 +313,7 @@
         apiConfig = {
           google: { keys: [], currentIndex: 0, model: "gemini-1.5-flash" },
           openai: { keys: [], currentIndex: 0, model: "gpt-4o-mini" },
-          deepseek: { keys: [], currentIndex: 0, model: "deepseek-chat" }
+          deepseek: { keys: [], currentIndex: 0, model: "deepseek-v4-flash" }
         };
         saveConfig();
       }

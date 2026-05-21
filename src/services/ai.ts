@@ -2,31 +2,115 @@ import { GoogleGenAI } from "@google/genai";
 import { AppState, GeneratedResult, StyleType } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
-// ─── ENV KEYS (Vercel Dashboard) ─────────────────────────────────────────────
+// ─── ENV KEYS (Vite/Railway/Vercel) ─────────────────────────────────────────
+// Lưu ý: App chạy frontend nên biến môi trường muốn dùng trong browser phải có tiền tố VITE_.
 // @ts-ignore
 const E = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {};
 
-const GEMINI_KEYS = [
+type ApiKeyItem = { key: string; label?: string; tier?: string; active?: boolean };
+
+function uniqueKeys(keys: Array<string | undefined | null>): string[] {
+  const seen = new Set<string>();
+  return keys
+    .map((k) => (typeof k === "string" ? k.trim() : ""))
+    .filter(Boolean)
+    .filter((k) => {
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+}
+
+function readLocalProviderKeys(provider: "google" | "deepseek" | "openai"): string[] {
+  try {
+    if (typeof window === "undefined") return [];
+    const raw = window.localStorage.getItem("api_key_manager_v1");
+    if (!raw) return [];
+    const config = JSON.parse(raw);
+    const keys = config?.[provider]?.keys;
+    if (!Array.isArray(keys)) return [];
+    return uniqueKeys(
+      keys
+        .filter((item: ApiKeyItem) => item && item.active !== false)
+        .map((item: ApiKeyItem) => item.key)
+    );
+  } catch (err) {
+    console.warn("[AI] Không đọc được api_key_manager_v1", err);
+    return [];
+  }
+}
+
+const GEMINI_KEYS = uniqueKeys([
   E.VITE_GEMINI_API_KEY,
+  E.VITE_GEMINI_API_KEY_1,
   E.VITE_GEMINI_API_KEY_2,
   E.VITE_GEMINI_API_KEY_3,
   E.VITE_GEMINI_API_KEY_4,
   E.VITE_GEMINI_API_KEY_5,
-].filter((k): k is string => typeof k === "string" && k.startsWith("AIza"));
-const DEEPSEEK_KEY = E.VITE_DEEPSEEK_API_KEY as string | undefined;
-const OPENAI_KEY = E.VITE_OPENAI_API_KEY as string | undefined;
+  E.VITE_GEMINI_API_KEY_PAID,
+  ...readLocalProviderKeys("google"),
+]).filter((k) => k.startsWith("AIza"));
+
+const DEEPSEEK_KEYS = uniqueKeys([
+  E.VITE_DEEPSEEK_API_KEY,
+  E.VITE_DEEPSEEK_API_KEY_1,
+  E.VITE_DEEPSEEK_API_KEY_2,
+  E.VITE_DEEPSEEK_API_KEY_3,
+  E.VITE_DEEPSEEK_API_KEY_4,
+  E.VITE_DEEPSEEK_API_KEY_5,
+  ...readLocalProviderKeys("deepseek"),
+]);
+
+const OPENAI_KEYS = uniqueKeys([
+  E.VITE_OPENAI_API_KEY,
+  E.VITE_OPENAI_API_KEY_1,
+  E.VITE_OPENAI_API_KEY_2,
+  E.VITE_OPENAI_API_KEY_3,
+  E.VITE_OPENAI_API_KEY_4,
+  E.VITE_OPENAI_API_KEY_5,
+  ...readLocalProviderKeys("openai"),
+]);
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
-const isQuotaError = (err: any): boolean =>
-  err?.status === 429 ||
-  String(err?.message).includes("429") ||
-  String(err?.message).includes("quota") ||
-  String(err?.message).includes("rate_limit");
+const errText = (err: any): string =>
+  `${err?.status ?? ""} ${err?.code ?? ""} ${err?.message ?? ""}`.toLowerCase();
+
+const isQuotaError = (err: any): boolean => {
+  const text = errText(err);
+  return (
+    err?.status === 429 ||
+    text.includes("429") ||
+    text.includes("quota") ||
+    text.includes("rate_limit") ||
+    text.includes("rate limit") ||
+    text.includes("resource_exhausted") ||
+    text.includes("insufficient_quota") ||
+    text.includes("insufficient balance") ||
+    text.includes("balance")
+  );
+};
+
+const isKeyError = (err: any): boolean => {
+  const text = errText(err);
+  return (
+    err?.status === 400 ||
+    err?.status === 401 ||
+    err?.status === 403 ||
+    text.includes("api key") ||
+    text.includes("invalid") ||
+    text.includes("unauthorized") ||
+    text.includes("forbidden") ||
+    text.includes("permission") ||
+    text.includes("billing")
+  );
+};
+
+const shouldTryNextKey = (err: any): boolean => isQuotaError(err) || isKeyError(err);
 
 // ─── GEMINI CALLER ───────────────────────────────────────────────────────────
 async function callGeminiText(model: string, prompt: string): Promise<string> {
   let lastErr: any;
-  for (const key of GEMINI_KEYS) {
+  for (const [index, key] of GEMINI_KEYS.entries()) {
     try {
       const ai = new GoogleGenAI({ apiKey: key });
       const res = await ai.models.generateContent({
@@ -38,14 +122,14 @@ async function callGeminiText(model: string, prompt: string): Promise<string> {
       throw new Error("Empty response");
     } catch (err: any) {
       lastErr = err;
-      if (isQuotaError(err)) {
-        console.warn("[AI] Gemini key hết quota → thử key tiếp");
+      if (shouldTryNextKey(err)) {
+        console.warn(`[AI] Gemini key #${index + 1} lỗi/hết quota → thử key tiếp`);
         continue;
       }
       throw err;
     }
   }
-  throw lastErr;
+  throw lastErr || new Error("Chưa cấu hình Gemini API Key.");
 }
 
 // ─── OPENAI / DEEPSEEK CALLER ────────────────────────────────────────────────
@@ -78,42 +162,81 @@ async function callOpenAICompat(
   return data.choices?.[0]?.message?.content ?? "";
 }
 
-// ─── AI TEXT: Gemini (free) → DeepSeek → OpenAI (trả phí) ───────────────────
+async function callProviderKeys(
+  providerName: "DeepSeek" | "OpenAI",
+  keys: string[],
+  endpoint: string,
+  model: string,
+  prompt: string
+): Promise<string> {
+  let lastErr: any;
+  for (const [index, key] of keys.entries()) {
+    try {
+      return await callOpenAICompat(endpoint, key, model, [{ role: "user", content: prompt }]);
+    } catch (err: any) {
+      lastErr = err;
+      if (shouldTryNextKey(err)) {
+        console.warn(`[AI] ${providerName} key #${index + 1} lỗi/hết quota → thử key tiếp`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr || new Error(`Chưa cấu hình ${providerName} API Key.`);
+}
+
+// ─── AI TEXT: Gemini free/paid → DeepSeek → OpenAI ──────────────────────────
 async function callAIText(model: string, prompt: string): Promise<string> {
+  let lastFallbackErr: any;
+
   if (GEMINI_KEYS.length > 0) {
     try {
       return await callGeminiText(model, prompt);
     } catch (err) {
-      if (isQuotaError(err)) {
-        console.warn("[AI] Gemini hết quota → DeepSeek");
-      } else throw err;
+      lastFallbackErr = err;
+      if (shouldTryNextKey(err)) {
+        console.warn("[AI] Tất cả Gemini key lỗi/hết quota → chuyển sang DeepSeek");
+      } else {
+        throw err;
+      }
     }
   }
-  if (DEEPSEEK_KEY) {
+
+  if (DEEPSEEK_KEYS.length > 0) {
     try {
-      return await callOpenAICompat(
+      return await callProviderKeys(
+        "DeepSeek",
+        DEEPSEEK_KEYS,
         "https://api.deepseek.com/chat/completions",
-        DEEPSEEK_KEY,
-        "deepseek-v4-flash",
-        [{ role: "user", content: prompt }]
+        E.VITE_DEEPSEEK_MODEL || "deepseek-v4-flash",
+        prompt
       );
     } catch (err) {
-      if (isQuotaError(err)) {
-        console.warn("[AI] DeepSeek hết quota → OpenAI");
-      } else throw err;
+      lastFallbackErr = err;
+      if (shouldTryNextKey(err)) {
+        console.warn("[AI] Tất cả DeepSeek key lỗi/hết quota → chuyển sang OpenAI");
+      } else {
+        throw err;
+      }
     }
   }
-  if (OPENAI_KEY) {
-    return await callOpenAICompat(
-      "https://api.openai.com/v1/chat/completions",
-      OPENAI_KEY,
-      "gpt-4o-mini",
-      [{ role: "user", content: prompt }]
-    );
+
+  if (OPENAI_KEYS.length > 0) {
+    try {
+      return await callProviderKeys(
+        "OpenAI",
+        OPENAI_KEYS,
+        "https://api.openai.com/v1/chat/completions",
+        E.VITE_OPENAI_MODEL || "gpt-4o-mini",
+        prompt
+      );
+    } catch (err) {
+      lastFallbackErr = err;
+      throw err;
+    }
   }
-  throw new Error(
-    "Tất cả API đều hết quota hoặc chưa cấu hình trên Vercel."
-  );
+
+  throw lastFallbackErr || new Error("Tất cả API đều hết quota hoặc chưa cấu hình Environment Variables.");
 }
 
 // ─── GỢI Ý TIÊU ĐỀ NHANH ─────────────────────────────────────────────────────
