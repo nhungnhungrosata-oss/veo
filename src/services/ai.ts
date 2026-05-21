@@ -2,8 +2,9 @@ import { GoogleGenAI } from "@google/genai";
 import { AppState, GeneratedResult, StyleType } from "../types";
 import { v4 as uuidv4 } from "uuid";
 
-// ─── ENV KEYS (Vite/Railway/Vercel) ─────────────────────────────────────────
-// Lưu ý: App chạy frontend nên biến môi trường muốn dùng trong browser phải có tiền tố VITE_.
+// ─── ENV KEYS CŨ CHO BROWSER FALLBACK ──────────────────────────────────────
+// Mặc định app sẽ gọi backend proxy /api/generate để key không lộ.
+// Các VITE_* bên dưới chỉ giữ để tương thích/fallback nếu bạn còn dùng cách cũ.
 // @ts-ignore
 const E = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {};
 
@@ -186,7 +187,7 @@ async function callProviderKeys(
 }
 
 // ─── AI TEXT: Gemini free/paid → DeepSeek → OpenAI ──────────────────────────
-async function callAIText(model: string, prompt: string): Promise<string> {
+async function callAITextDirect(model: string, prompt: string): Promise<string> {
   let lastFallbackErr: any;
 
   if (GEMINI_KEYS.length > 0) {
@@ -237,6 +238,44 @@ async function callAIText(model: string, prompt: string): Promise<string> {
   }
 
   throw lastFallbackErr || new Error("Tất cả API đều hết quota hoặc chưa cấu hình Environment Variables.");
+}
+
+// ─── BACKEND PROXY: ưu tiên gọi /api/generate để giấu key và gom fallback ở server ──
+async function callBackendProxyText(model: string, prompt: string): Promise<string> {
+  if (typeof window === "undefined") throw new Error("Proxy chỉ gọi từ browser.");
+  const res = await fetch("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ model, prompt }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.ok === false) {
+    const err: any = new Error(data?.error || `Proxy HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+
+  if (!data?.text) throw new Error("AI proxy không trả về nội dung.");
+  console.info(`[AI] Proxy provider=${data.provider || "unknown"}, keyIndex=${data.keyIndex || "?"}`);
+  return data.text;
+}
+
+async function callAIText(model: string, prompt: string): Promise<string> {
+  const useProxy = E.VITE_USE_AI_PROXY !== "false";
+
+  if (useProxy && typeof window !== "undefined") {
+    try {
+      return await callBackendProxyText(model, prompt);
+    } catch (err: any) {
+      const hasBrowserFallbackKeys = GEMINI_KEYS.length > 0 || DEEPSEEK_KEYS.length > 0 || OPENAI_KEYS.length > 0;
+      console.warn("[AI] Backend proxy lỗi hoặc chưa bật → fallback cơ chế cũ nếu có browser key", err);
+      if (!hasBrowserFallbackKeys) throw err;
+    }
+  }
+
+  return callAITextDirect(model, prompt);
 }
 
 // ─── GỢI Ý TIÊU ĐỀ NHANH ─────────────────────────────────────────────────────

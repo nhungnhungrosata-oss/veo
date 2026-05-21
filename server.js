@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { generateViaProxy } from './api/generate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +10,7 @@ const distDir = path.join(__dirname, 'dist');
 const port = process.env.PORT || 3000;
 
 app.disable('x-powered-by');
+app.use(express.json({ limit: '1mb' }));
 
 app.use((req, res, next) => {
   if (req.path === '/' || req.path.endsWith('.html') || req.path === '/sw.js' || req.path === '/sw2.js' || req.path === '/pwa-register.js') {
@@ -17,6 +19,27 @@ app.use((req, res, next) => {
     res.setHeader('Expires', '0');
   }
   next();
+});
+
+
+app.get('/api/health', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ok: true });
+});
+
+app.post('/api/generate', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const result = await generateViaProxy(req.body || {});
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[AI Proxy]', err);
+    const status = err?.status && Number.isInteger(err.status) ? err.status : 500;
+    res.status(status >= 400 && status < 600 ? status : 500).json({
+      ok: false,
+      error: err?.message || 'AI proxy failed',
+    });
+  }
 });
 
 app.use(express.static(distDir, {
