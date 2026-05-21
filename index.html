@@ -35,33 +35,13 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16x16.png" />
 
-    <!-- Xóa SW cũ và cache cũ ngay khi load -->
-    <script>
-      (function() {
-        var SW_VERSION = 'v3';
-        var storageKey = '__sw_version__';
-        var currentVersion = localStorage.getItem(storageKey);
-        if (currentVersion !== SW_VERSION) {
-          localStorage.setItem(storageKey, SW_VERSION);
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(regs) {
-              regs.forEach(function(reg) { reg.unregister(); });
-            });
-          }
-          if ('caches' in window) {
-            caches.keys().then(function(keys) {
-              keys.forEach(function(key) { caches.delete(key); });
-            });
-          }
-          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-            window.location.reload(true);
-          }
-        }
-      })();
-    </script>
-    <!-- PWA Scripts -->
+    <!-- Prevent stale HTML after deploy -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <!-- Cleanup old PWA cache/service workers; do not register a new SW -->
     <script src="/pwa-register.js" defer></script>
-    <script src="/pwa-install.js" defer></script>
   </head>
   <body>
     <div id="root"></div>

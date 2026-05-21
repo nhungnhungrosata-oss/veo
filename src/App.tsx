@@ -128,19 +128,26 @@ export default function App() {
   // Fix 2: Load & Save ảnh thư viện
   const loadImageLibrary = async () => {
     try {
-      const saved = await localforage.getItem<string[]>(IMAGE_LIBRARY_KEY);
-      if (saved && saved.length > 0) {
-        setState(s => ({ ...s, images: saved, selectedImageIndex: 0 }));
+      const saved = await localforage.getItem<unknown>(IMAGE_LIBRARY_KEY);
+      const images = Array.isArray(saved)
+        ? saved.filter((img): img is string => typeof img === "string" && img.startsWith("data:image/"))
+        : [];
+      if (images.length > 0) {
+        setState(s => ({ ...s, images, selectedImageIndex: 0 }));
+      } else if (saved) {
+        await localforage.removeItem(IMAGE_LIBRARY_KEY);
       }
     } catch (e) {
-      console.warn("Không load được thư viện ảnh", e);
+      console.warn("Không load được thư viện ảnh, đã bỏ qua dữ liệu cũ", e);
+      try { await localforage.removeItem(IMAGE_LIBRARY_KEY); } catch {}
     }
   };
 
   const saveImageLibrary = async (images: string[]) => {
     try {
       // Giữ tối đa 6 ảnh gần nhất để tránh tràn bộ nhớ
-      await localforage.setItem(IMAGE_LIBRARY_KEY, images.slice(0, 6));
+      const safeImages = images.filter(img => typeof img === "string" && img.startsWith("data:image/")).slice(0, 6);
+      await localforage.setItem(IMAGE_LIBRARY_KEY, safeImages);
     } catch (e) {
       console.warn("Không lưu được thư viện ảnh", e);
     }
@@ -155,10 +162,15 @@ export default function App() {
   };
 
   const loadHistory = async () => {
-    const hist = await getHistory();
-    setHistory(hist);
-    if (!currentResult && hist.length > 0) {
-      setCurrentResult(hist[0]);
+    try {
+      const hist = await getHistory();
+      setHistory(hist);
+      if (!currentResult && hist.length > 0) {
+        setCurrentResult(hist[0]);
+      }
+    } catch (e) {
+      console.warn("Không load được lịch sử", e);
+      setHistory([]);
     }
   };
 

@@ -1,33 +1,41 @@
 import localforage from "localforage";
 import { GeneratedResult, STORAGE_KEY } from "../types";
 
-export async function saveResult(result: GeneratedResult): Promise<void> {
-  const current = await getHistory();
-  // Add to top, keep last 24h?
-  // User asked for: "Lưu trong 24h, hiển thị 3 kết quả gần nhất."
+const ONE_DAY = 24 * 60 * 60 * 1000;
+
+function normalizeHistory(data: unknown): GeneratedResult[] {
+  if (!Array.isArray(data)) return [];
   const now = Date.now();
-  const ONE_DAY = 24 * 60 * 60 * 1000;
-  
-  let validHistory = current.filter(item => now - item.timestamp < ONE_DAY);
-  validHistory.unshift(result);
-  
-  // Keep only the most recent to avoid localstorage bloat if necessary, but 24h is the rule.
-  
-  await localforage.setItem(STORAGE_KEY, validHistory);
+  return data
+    .filter((item): item is GeneratedResult => {
+      return !!item && typeof item === 'object' && typeof (item as any).timestamp === 'number';
+    })
+    .filter((item) => now - item.timestamp < ONE_DAY);
+}
+
+export async function saveResult(result: GeneratedResult): Promise<void> {
+  try {
+    const current = await getHistory();
+    const validHistory = [result, ...current].slice(0, 20);
+    await localforage.setItem(STORAGE_KEY, validHistory);
+  } catch (err) {
+    console.warn('[storage] Không lưu được lịch sử:', err);
+  }
 }
 
 export async function getHistory(): Promise<GeneratedResult[]> {
-  const data = await localforage.getItem<GeneratedResult[]>(STORAGE_KEY);
-  if (!data) return [];
-  
-  const now = Date.now();
-  const ONE_DAY = 24 * 60 * 60 * 1000;
-  // Clean up old ones when fetching
-  const validHistory = data.filter(item => now - item.timestamp < ONE_DAY);
-  
-  if (validHistory.length !== data.length) {
-    await localforage.setItem(STORAGE_KEY, validHistory);
+  try {
+    const data = await localforage.getItem<GeneratedResult[]>(STORAGE_KEY);
+    const validHistory = normalizeHistory(data);
+    if (Array.isArray(data) && validHistory.length !== data.length) {
+      await localforage.setItem(STORAGE_KEY, validHistory);
+    }
+    return validHistory;
+  } catch (err) {
+    console.warn('[storage] Lịch sử bị lỗi, đang reset:', err);
+    try {
+      await localforage.removeItem(STORAGE_KEY);
+    } catch {}
+    return [];
   }
-  
-  return validHistory;
 }
