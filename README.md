@@ -1,20 +1,21 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ClipBrand AI - bản đã fix giao diện
 
-# Run and deploy your AI Studio app
+Bản này đã chỉnh:
 
-This contains everything you need to run your app locally.
+- Thu gọn khối Prompt tiếng Anh trong từng scene, có scroll dọc, không làm card quá cao.
+- Thumbnail có nhiều kiểu button đa dạng hơn, giữ mẫu vuông/bo góc cho thumbnail đầu.
+- Chữ thumbnail luôn nằm trong button.
+- Nút tải thumbnail xuất ảnh 9:16 bằng canvas, có đủ ảnh nền + overlay + button + chữ.
 
-View your app in AI Studio: https://ai.studio/apps/281fee1c-dc10-4619-9385-521b06c5ecd3
+## Chạy local
 
-## Run Locally
+```bash
+npm install
+npm run dev
+```
 
-**Prerequisites:**  Node.js
+## Build
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm run build
+```
