@@ -1,7 +1,9 @@
-# ClipBrand AI - bản đã fix giao diện
+# Kịch Bản Thương Hiệu - bản đã fix giao diện
 
 Bản này đã chỉnh:
 
+- Đổi tên hiển thị sang Kịch Bản Thương Hiệu.
+- Thêm menu Kịch Bản 3D, hiện đang để trống để bổ sung sau.
 - Thu gọn khối Prompt tiếng Anh trong từng scene, có scroll dọc, không làm card quá cao.
 - Thumbnail có nhiều kiểu button đa dạng hơn, giữ mẫu vuông/bo góc cho thumbnail đầu.
 - Chữ thumbnail luôn nằm trong button.
