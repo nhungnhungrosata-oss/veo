@@ -20,6 +20,8 @@ const INITIAL_STATE: AppState = {
 
 const IMAGE_LIBRARY_KEY = 'clipbrand_image_library';
 
+type ActiveMenu = 'brand' | 'threeD';
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
@@ -164,7 +166,7 @@ function ThumbnailItem({ thumb, refImage, idx }: { thumb: any; refImage: string 
       lines.forEach((line, i) => ctx.fillText(line, canvas.width / 2, startY + i * lineHeight));
 
       const link = document.createElement('a');
-      link.download = `clipbrand-thumb-${idx + 1}.webp`;
+      link.download = `kich-ban-thuong-hieu-thumb-${idx + 1}.webp`;
       link.href = canvas.toDataURL('image/webp', 0.96);
       link.click();
       toast.success('Đã tải ảnh kèm chữ');
@@ -201,6 +203,7 @@ export default function App() {
   const [currentResult, setCurrentResult] = useState<GeneratedResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [activeMenu, setActiveMenu] = useState<ActiveMenu>('brand');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -261,81 +264,126 @@ export default function App() {
 
   const refImage = currentResult?.inputs.images[currentResult.inputs.selectedImageIndex ?? 0];
 
+  const handleNew = () => {
+    setState({ ...INITIAL_STATE, images: state.images, selectedImageIndex: state.selectedImageIndex });
+    setCurrentResult(null);
+  };
+
+  const renderHeader = () => (
+    <header className="sticky top-0 z-50 bg-gradient-to-br from-brand-blue to-brand-blue-dark shadow-md">
+      <div className="max-w-7xl mx-auto px-4 min-h-16 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-xl bg-brand-yellow-light flex items-center justify-center"><Sparkles className="w-5 h-5 text-brand-text-title" /></div>
+          <h1 className="font-bold text-lg text-white">Kịch Bản Thương Hiệu</h1>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
+            <button
+              type="button"
+              onClick={() => setActiveMenu('brand')}
+              className={cx('px-4 py-2 rounded-xl text-sm font-bold border transition whitespace-nowrap', activeMenu === 'brand' ? 'bg-white text-brand-blue border-white shadow-sm' : 'bg-white/10 text-white border-white/25 hover:bg-white/20')}
+            >
+              Kịch Bản Thương Hiệu
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveMenu('threeD')}
+              className={cx('px-4 py-2 rounded-xl text-sm font-bold border transition whitespace-nowrap', activeMenu === 'threeD' ? 'bg-white text-brand-blue border-white shadow-sm' : 'bg-white/10 text-white border-white/25 hover:bg-white/20')}
+            >
+              Kịch Bản 3D
+            </button>
+          </div>
+          <Button onClick={handleNew} className="bg-white/15 hover:bg-white/30 text-white text-xs px-3 py-2 border border-white/30"><RefreshCw className="w-4 h-4" />Tạo mới</Button>
+        </div>
+      </div>
+    </header>
+  );
+
+  const renderThreeDPlaceholder = () => (
+    <main className="max-w-7xl mx-auto px-4 py-6">
+      <div className="card min-h-[420px] flex items-center justify-center text-center">
+        <div>
+          <Sparkles className="w-12 h-12 mx-auto text-brand-blue mb-4" />
+          <h2 className="font-bold text-2xl text-brand-text-title mb-2">Kịch Bản 3D</h2>
+          <p className="text-brand-text-muted font-medium">Mục này đang để trống, sẽ thêm nội dung sau.</p>
+        </div>
+      </div>
+    </main>
+  );
+
+  const renderBrandScript = () => (
+    <main className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <section className="lg:col-span-5 space-y-6">
+        <div className="card">
+          <div className="flex justify-between mb-3"><h2 className="font-bold text-brand-text-title">1. Ảnh tham chiếu</h2><span className="text-xs text-brand-text-muted">{state.images.length}/6 ảnh</span></div>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            <label className="flex flex-col items-center justify-center w-24 h-32 rounded-xl border-2 border-dashed border-brand-border hover:border-brand-blue cursor-pointer shrink-0 bg-brand-bg-sub">
+              <ImagePlus className="w-6 h-6 text-brand-blue mb-2" /><span className="text-xs">Thêm ảnh</span>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+            </label>
+            {state.images.map((img, i) => <div key={i} className={cx('relative w-24 h-32 rounded-xl overflow-hidden shrink-0 cursor-pointer', state.selectedImageIndex === i && 'ring-2 ring-brand-blue ring-offset-2')} onClick={() => setState((s) => ({ ...s, selectedImageIndex: i }))}>
+              <img src={img} className="w-full h-full object-cover" />
+              {state.selectedImageIndex === i && <div className="absolute inset-0 bg-brand-blue/20 grid place-items-center"><span className="bg-brand-yellow rounded-full p-1"><Check className="w-4 h-4" /></span></div>}
+              <button className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white rounded-full p-1" onClick={(e) => { e.stopPropagation(); setState((s) => { const images = s.images.filter((_, idx) => idx !== i); saveImages(images); return { ...s, images, selectedImageIndex: images.length ? 0 : null }; }); }}><X className="w-3 h-3" /></button>
+            </div>)}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex justify-between mb-3"><h2 className="font-bold text-brand-text-title">2. Nội dung / Tiêu đề</h2><span className="text-xs text-brand-text-muted">{state.content.trim().split(/\s+/).filter(Boolean).length}/2000 từ</span></div>
+          <textarea className="input min-h-[160px]" placeholder="Nhập ý tưởng, tiêu đề hoặc nội dung dài mà bạn muốn truyền tải..." value={state.content} onChange={(e) => handleContentChange(e.target.value)} />
+          {suggestions.length > 0 && <div className="mt-3 space-y-2">{suggestions.map((s, i) => <button key={i} className="w-full text-left px-3 py-3 rounded-lg bg-brand-bg-sub border border-brand-border text-sm" onClick={() => { setState((old) => ({ ...old, content: s })); setSuggestions([]); }}>{s}</button>)}</div>}
+        </div>
+
+        <div className="card">
+          <h2 className="font-bold text-brand-text-title mb-3">3. Điều khiển AI</h2>
+          <textarea className="input min-h-[70px]" placeholder="Ví dụ: Năng lượng cao, chuyên gia, gần gũi..." value={state.notes} onChange={(e) => setState((s) => ({ ...s, notes: e.target.value }))} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="card"><h3 className="font-bold mb-2">Cảnh quay</h3><div className="flex items-center bg-brand-bg-sub rounded-xl border border-brand-border"><button className="p-3" onClick={() => setState((s) => ({ ...s, sceneCount: Math.max(1, s.sceneCount - 1) }))}><Minus /></button><span className="flex-1 text-center font-bold">{state.sceneCount}</span><button className="p-3" onClick={() => setState((s) => ({ ...s, sceneCount: Math.min(7, s.sceneCount + 1) }))}><Plus /></button></div></div>
+          <div className="card"><h3 className="font-bold mb-2">Giọng đọc</h3><select className="input h-12" value={state.voice} onChange={(e) => setState((s) => ({ ...s, voice: e.target.value as VoiceType }))}><option>Bắc</option><option>Trung</option><option>Nam</option></select></div>
+        </div>
+
+        <div className="card space-y-3">
+          <h3 className="font-bold">Phong cách</h3>
+          <div className="grid grid-cols-2 gap-2">{(['energy','professional','gentle','natural'] as StyleType[]).map((v) => <button key={v} className={cx('p-3 rounded-xl border font-bold text-left', state.style === v ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white border-brand-border')} onClick={() => setState((s) => ({ ...s, style: v }))}>{v === 'energy' ? '🚀 Năng lượng' : v === 'professional' ? '💼 Chuyên nghiệp' : v === 'gentle' ? '☕ Nhẹ nhàng' : '🏡 Tự nhiên'}</button>)}</div>
+        </div>
+
+        <div className="card space-y-3"><h3 className="font-bold">Model Video</h3><div className="grid grid-cols-2 gap-2">{(['Veo 3','Gork'] as VideoModelType[]).map((v) => <button key={v} className={cx('p-3 rounded-xl border font-bold', state.videoModel === v ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white border-brand-border')} onClick={() => setState((s) => ({ ...s, videoModel: v }))}>{v}<span className="block text-xs font-medium">Video {v === 'Veo 3' ? 8 : 10} giây</span></button>)}</div></div>
+
+        <Button onClick={handleGenerate} disabled={loading} className="w-full h-14 bg-brand-yellow hover:bg-brand-yellow-light text-brand-text-title shadow-lg text-base"><Wand2 className="w-5 h-5" />{loading ? 'Đang tạo kịch bản...' : 'Tạo Kịch Bản Video'}</Button>
+      </section>
+
+      <section className="lg:col-span-7 space-y-6">
+        {!currentResult ? <div className="h-[400px] rounded-2xl border border-dashed border-brand-border bg-white grid place-items-center text-center p-6"><div><Play className="w-12 h-12 mx-auto text-brand-placeholder mb-4" /><p className="text-brand-text-muted font-medium">Nhập thông tin và bấm Tạo kịch bản video để xem kết quả.</p></div></div> : <>
+          <div className="card"><div className="flex items-start justify-between gap-4"><div><h3 className="font-bold text-brand-text-title text-lg">{currentResult.hook}</h3><div className="mt-2 flex flex-wrap gap-2">{currentResult.hashtags.map((tag) => <span key={tag} className="text-xs font-bold bg-brand-yellow-light text-[#92400E] px-2 py-1 rounded-full">{tag}</span>)}</div></div><Button className="border border-brand-blue text-brand-blue p-3" onClick={() => copyToClipboard(`${currentResult.hook}\n\n${currentResult.hashtags.join(' ')}`, 'Hook & Hashtags')}><Copy className="w-4 h-4" /></Button></div></div>
+
+          <div className="space-y-4"><h3 className="font-bold text-lg flex items-center gap-2 text-brand-text-title"><Play className="w-5 h-5 text-brand-blue" />Kịch bản chi tiết ({currentResult.scenes.length} cảnh)</h3>{currentResult.scenes.map((scene, idx) => <div key={idx} className="rounded-2xl border border-brand-border bg-white shadow-sm overflow-hidden">
+            <div className="flex flex-col sm:flex-row">
+              <div className="bg-brand-bg-sub text-brand-text-body p-4 sm:w-[34%] flex flex-col relative shrink-0 border-r border-brand-border/50 max-h-[240px] sm:max-h-[250px] overflow-hidden">
+                <div className="flex items-center justify-between mb-3 shrink-0"><span className="bg-white text-brand-blue border border-brand-blue font-mono text-[11px] font-bold rounded-full px-2 py-1">SCENE {idx + 1}</span><span className="bg-brand-yellow-light text-[#92400E] text-[11px] font-bold rounded-full px-2 py-1">{currentResult.inputs.videoModel}</span></div>
+                <p className="text-[12px] leading-relaxed font-mono opacity-90 max-h-[145px] overflow-y-auto pr-2 mb-11">{scene.videoPrompt}</p>
+                <Button className="absolute bottom-2 right-2 hover:bg-brand-yellow-light text-brand-blue min-h-[40px] px-3" onClick={() => copyToClipboard(scene.videoPrompt, `Prompt Cảnh ${idx + 1}`)}><Copy className="w-4 h-4" />Prompt</Button>
+              </div>
+              <div className="bg-white p-5 flex-1 relative flex flex-col justify-center min-h-[140px]"><p className="text-brand-text-body text-[14px] leading-relaxed pl-4 border-l-[3px] border-brand-yellow font-medium">"{scene.voiceScript}"</p><Button className="absolute right-3 top-3 h-10 w-10 text-brand-blue bg-brand-bg-sub hover:bg-brand-yellow-light rounded-xl" onClick={() => copyToClipboard(scene.voiceScript, `Thoại Cảnh ${idx + 1}`)}><Copy className="w-4 h-4" /></Button></div>
+            </div>
+            <div className="bg-brand-bg-main border-t border-brand-border p-3 sm:px-5 flex justify-end"><Button className="w-full sm:w-auto bg-brand-yellow hover:bg-brand-yellow-light text-brand-text-title rounded-xl min-h-[44px] px-4" onClick={() => copyToClipboard(`Prompt Video:\n${scene.videoPrompt}\n\nLời thoại:\n${scene.voiceScript}`, 'Prompt + Lời thoại')}><Copy className="w-4 h-4" />Copy Prompt + Lời thoại</Button></div>
+          </div>)}</div>
+
+          <div className="space-y-4 pt-4 border-t border-brand-border"><h3 className="font-bold text-lg flex items-center gap-2 text-brand-text-title"><ImagePlus className="w-5 h-5 text-brand-yellow" />Gợi ý Thumbnail</h3><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">{currentResult.thumbnailVariations.map((thumb, idx) => <ThumbnailItem key={idx} thumb={thumb} refImage={refImage} idx={idx} />)}</div></div>
+        </>}
+
+        {history.length > 0 && <div className="card"><h3 className="font-bold mb-3">Lịch sử gần đây</h3><div className="space-y-2">{history.slice(0, 3).map((item) => <button key={item.id} className="w-full text-left p-3 rounded-xl border border-brand-border hover:border-brand-blue" onClick={() => setCurrentResult(item)}><span className="font-bold line-clamp-1">{item.hook}</span><span className="block text-xs text-brand-text-muted">{new Date(item.timestamp).toLocaleString('vi-VN')} · {item.scenes.length} cảnh</span></button>)}</div></div>}
+      </section>
+    </main>
+  );
+
   return (
     <div className="min-h-screen bg-brand-bg-sub text-brand-text-body pb-20">
       <Toaster position="top-center" richColors />
-      <header className="sticky top-0 z-50 bg-gradient-to-br from-brand-blue to-brand-blue-dark shadow-md">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-xl bg-brand-yellow-light flex items-center justify-center"><Sparkles className="w-5 h-5 text-brand-text-title" /></div><h1 className="font-bold text-lg text-white">ClipBrand AI</h1></div>
-          <Button onClick={() => { setState({ ...INITIAL_STATE, images: state.images, selectedImageIndex: state.selectedImageIndex }); setCurrentResult(null); }} className="bg-white/15 hover:bg-white/30 text-white text-xs px-3 py-2 border border-white/30"><RefreshCw className="w-4 h-4" />Tạo mới</Button>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <section className="lg:col-span-5 space-y-6">
-          <div className="card">
-            <div className="flex justify-between mb-3"><h2 className="font-bold text-brand-text-title">1. Ảnh tham chiếu</h2><span className="text-xs text-brand-text-muted">{state.images.length}/6 ảnh</span></div>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              <label className="flex flex-col items-center justify-center w-24 h-32 rounded-xl border-2 border-dashed border-brand-border hover:border-brand-blue cursor-pointer shrink-0 bg-brand-bg-sub">
-                <ImagePlus className="w-6 h-6 text-brand-blue mb-2" /><span className="text-xs">Thêm ảnh</span>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-              </label>
-              {state.images.map((img, i) => <div key={i} className={cx('relative w-24 h-32 rounded-xl overflow-hidden shrink-0 cursor-pointer', state.selectedImageIndex === i && 'ring-2 ring-brand-blue ring-offset-2')} onClick={() => setState((s) => ({ ...s, selectedImageIndex: i }))}>
-                <img src={img} className="w-full h-full object-cover" />
-                {state.selectedImageIndex === i && <div className="absolute inset-0 bg-brand-blue/20 grid place-items-center"><span className="bg-brand-yellow rounded-full p-1"><Check className="w-4 h-4" /></span></div>}
-                <button className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white rounded-full p-1" onClick={(e) => { e.stopPropagation(); setState((s) => { const images = s.images.filter((_, idx) => idx !== i); saveImages(images); return { ...s, images, selectedImageIndex: images.length ? 0 : null }; }); }}><X className="w-3 h-3" /></button>
-              </div>)}
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex justify-between mb-3"><h2 className="font-bold text-brand-text-title">2. Nội dung / Tiêu đề</h2><span className="text-xs text-brand-text-muted">{state.content.trim().split(/\s+/).filter(Boolean).length}/2000 từ</span></div>
-            <textarea className="input min-h-[160px]" placeholder="Nhập ý tưởng, tiêu đề hoặc nội dung dài mà bạn muốn truyền tải..." value={state.content} onChange={(e) => handleContentChange(e.target.value)} />
-            {suggestions.length > 0 && <div className="mt-3 space-y-2">{suggestions.map((s, i) => <button key={i} className="w-full text-left px-3 py-3 rounded-lg bg-brand-bg-sub border border-brand-border text-sm" onClick={() => { setState((old) => ({ ...old, content: s })); setSuggestions([]); }}>{s}</button>)}</div>}
-          </div>
-
-          <div className="card">
-            <h2 className="font-bold text-brand-text-title mb-3">3. Điều khiển AI</h2>
-            <textarea className="input min-h-[70px]" placeholder="Ví dụ: Năng lượng cao, chuyên gia, gần gũi..." value={state.notes} onChange={(e) => setState((s) => ({ ...s, notes: e.target.value }))} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="card"><h3 className="font-bold mb-2">Cảnh quay</h3><div className="flex items-center bg-brand-bg-sub rounded-xl border border-brand-border"><button className="p-3" onClick={() => setState((s) => ({ ...s, sceneCount: Math.max(1, s.sceneCount - 1) }))}><Minus /></button><span className="flex-1 text-center font-bold">{state.sceneCount}</span><button className="p-3" onClick={() => setState((s) => ({ ...s, sceneCount: Math.min(7, s.sceneCount + 1) }))}><Plus /></button></div></div>
-            <div className="card"><h3 className="font-bold mb-2">Giọng đọc</h3><select className="input h-12" value={state.voice} onChange={(e) => setState((s) => ({ ...s, voice: e.target.value as VoiceType }))}><option>Bắc</option><option>Trung</option><option>Nam</option></select></div>
-          </div>
-
-          <div className="card space-y-3">
-            <h3 className="font-bold">Phong cách</h3>
-            <div className="grid grid-cols-2 gap-2">{(['energy','professional','gentle','natural'] as StyleType[]).map((v) => <button key={v} className={cx('p-3 rounded-xl border font-bold text-left', state.style === v ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white border-brand-border')} onClick={() => setState((s) => ({ ...s, style: v }))}>{v === 'energy' ? '🚀 Năng lượng' : v === 'professional' ? '💼 Chuyên nghiệp' : v === 'gentle' ? '☕ Nhẹ nhàng' : '🏡 Tự nhiên'}</button>)}</div>
-          </div>
-
-          <div className="card space-y-3"><h3 className="font-bold">Model Video</h3><div className="grid grid-cols-2 gap-2">{(['Veo 3','Gork'] as VideoModelType[]).map((v) => <button key={v} className={cx('p-3 rounded-xl border font-bold', state.videoModel === v ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white border-brand-border')} onClick={() => setState((s) => ({ ...s, videoModel: v }))}>{v}<span className="block text-xs font-medium">Video {v === 'Veo 3' ? 8 : 10} giây</span></button>)}</div></div>
-
-          <Button onClick={handleGenerate} disabled={loading} className="w-full h-14 bg-brand-yellow hover:bg-brand-yellow-light text-brand-text-title shadow-lg text-base"><Wand2 className="w-5 h-5" />{loading ? 'Đang tạo kịch bản...' : 'Tạo Kịch Bản Video'}</Button>
-        </section>
-
-        <section className="lg:col-span-7 space-y-6">
-          {!currentResult ? <div className="h-[400px] rounded-2xl border border-dashed border-brand-border bg-white grid place-items-center text-center p-6"><div><Play className="w-12 h-12 mx-auto text-brand-placeholder mb-4" /><p className="text-brand-text-muted font-medium">Nhập thông tin và bấm Tạo kịch bản video để xem kết quả.</p></div></div> : <>
-            <div className="card"><div className="flex items-start justify-between gap-4"><div><h3 className="font-bold text-brand-text-title text-lg">{currentResult.hook}</h3><div className="mt-2 flex flex-wrap gap-2">{currentResult.hashtags.map((tag) => <span key={tag} className="text-xs font-bold bg-brand-yellow-light text-[#92400E] px-2 py-1 rounded-full">{tag}</span>)}</div></div><Button className="border border-brand-blue text-brand-blue p-3" onClick={() => copyToClipboard(`${currentResult.hook}\n\n${currentResult.hashtags.join(' ')}`, 'Hook & Hashtags')}><Copy className="w-4 h-4" /></Button></div></div>
-
-            <div className="space-y-4"><h3 className="font-bold text-lg flex items-center gap-2 text-brand-text-title"><Play className="w-5 h-5 text-brand-blue" />Kịch bản chi tiết ({currentResult.scenes.length} cảnh)</h3>{currentResult.scenes.map((scene, idx) => <div key={idx} className="rounded-2xl border border-brand-border bg-white shadow-sm overflow-hidden">
-              <div className="flex flex-col sm:flex-row">
-                <div className="bg-brand-bg-sub text-brand-text-body p-4 sm:w-[34%] flex flex-col relative shrink-0 border-r border-brand-border/50 max-h-[240px] sm:max-h-[250px] overflow-hidden">
-                  <div className="flex items-center justify-between mb-3 shrink-0"><span className="bg-white text-brand-blue border border-brand-blue font-mono text-[11px] font-bold rounded-full px-2 py-1">SCENE {idx + 1}</span><span className="bg-brand-yellow-light text-[#92400E] text-[11px] font-bold rounded-full px-2 py-1">{currentResult.inputs.videoModel}</span></div>
-                  <p className="text-[12px] leading-relaxed font-mono opacity-90 max-h-[145px] overflow-y-auto pr-2 mb-11">{scene.videoPrompt}</p>
-                  <Button className="absolute bottom-2 right-2 hover:bg-brand-yellow-light text-brand-blue min-h-[40px] px-3" onClick={() => copyToClipboard(scene.videoPrompt, `Prompt Cảnh ${idx + 1}`)}><Copy className="w-4 h-4" />Prompt</Button>
-                </div>
-                <div className="bg-white p-5 flex-1 relative flex flex-col justify-center min-h-[140px]"><p className="text-brand-text-body text-[14px] leading-relaxed pl-4 border-l-[3px] border-brand-yellow font-medium">"{scene.voiceScript}"</p><Button className="absolute right-3 top-3 h-10 w-10 text-brand-blue bg-brand-bg-sub hover:bg-brand-yellow-light rounded-xl" onClick={() => copyToClipboard(scene.voiceScript, `Thoại Cảnh ${idx + 1}`)}><Copy className="w-4 h-4" /></Button></div>
-              </div>
-              <div className="bg-brand-bg-main border-t border-brand-border p-3 sm:px-5 flex justify-end"><Button className="w-full sm:w-auto bg-brand-yellow hover:bg-brand-yellow-light text-brand-text-title rounded-xl min-h-[44px] px-4" onClick={() => copyToClipboard(`Prompt Video:\n${scene.videoPrompt}\n\nLời thoại:\n${scene.voiceScript}`, 'Prompt + Lời thoại')}><Copy className="w-4 h-4" />Copy Prompt + Lời thoại</Button></div>
-            </div>)}</div>
-
-            <div className="space-y-4 pt-4 border-t border-brand-border"><h3 className="font-bold text-lg flex items-center gap-2 text-brand-text-title"><ImagePlus className="w-5 h-5 text-brand-yellow" />Gợi ý Thumbnail</h3><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">{currentResult.thumbnailVariations.map((thumb, idx) => <ThumbnailItem key={idx} thumb={thumb} refImage={refImage} idx={idx} />)}</div></div>
-          </>}
-
-          {history.length > 0 && <div className="card"><h3 className="font-bold mb-3">Lịch sử gần đây</h3><div className="space-y-2">{history.slice(0, 3).map((item) => <button key={item.id} className="w-full text-left p-3 rounded-xl border border-brand-border hover:border-brand-blue" onClick={() => setCurrentResult(item)}><span className="font-bold line-clamp-1">{item.hook}</span><span className="block text-xs text-brand-text-muted">{new Date(item.timestamp).toLocaleString('vi-VN')} · {item.scenes.length} cảnh</span></button>)}</div></div>}
-        </section>
-      </main>
+      {renderHeader()}
+      {activeMenu === 'brand' ? renderBrandScript() : renderThreeDPlaceholder()}
     </div>
   );
 }
