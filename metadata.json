@@ -1,6 +1,6 @@
 {
-  "name": "ClipBrand AI",
-  "description": "Personal branding AI application that automatically generates short video scripts, viral hooks, and video prompts.",
+  "name": "Kịch Bản Thương Hiệu",
+  "description": "Ứng dụng AI tạo kịch bản video thương hiệu, hook viral và prompt video ngắn.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
