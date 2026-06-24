@@ -61,10 +61,13 @@ export interface ThreeDGeneratedResult {
 
 export const THREE_D_STORAGE_KEY = 'video_3d_scripts_v2';
 
+const VOICE_MIN_WORDS = 16;
+const VOICE_MAX_WORDS = 22;
+
 const VOICE_DIRECTION: Record<string, string> = {
-  Bắc: 'The character speaks natural Vietnamese with a clear standard Northern Vietnamese accent. Precise Vietnamese lip sync.',
-  Trung: 'The character speaks natural Vietnamese with a clear intelligible Central Vietnamese accent. Precise Vietnamese lip sync.',
-  Nam: 'The character speaks natural Vietnamese with a clear standard Southern Vietnamese accent. Precise Vietnamese lip sync.',
+  Bắc: 'The character speaks natural Vietnamese with a clear standard Northern Vietnamese accent. Precise Vietnamese lip sync, paced for an 8-second line.',
+  Trung: 'The character speaks natural Vietnamese with a clear intelligible Central Vietnamese accent. Precise Vietnamese lip sync, paced for an 8-second line.',
+  Nam: 'The character speaks natural Vietnamese with a clear standard Southern Vietnamese accent. Precise Vietnamese lip sync, paced for an 8-second line.',
 };
 
 const VIDEO_TECHNIQUE: Record<string, string> = {
@@ -180,13 +183,75 @@ function extractJSON(text: string): any {
 }
 
 function wordCount(text: string): number {
-  return text.trim().split(/\s+/).filter(Boolean).length;
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function cleanSentence(text: string): string {
+  return String(text || '')
+    .replace(/[“”]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function ensurePunctuation(text: string): string {
+  const cleaned = cleanSentence(text).replace(/[,:;\-–—]+$/g, '').trim();
+  if (!cleaned) return '';
+  return /[.!?…]$/.test(cleaned) ? cleaned : cleaned + '.';
 }
 
 function trimWords(text: string, maxWords: number): string {
-  const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
-  if (words.length <= maxWords) return words.join(' ');
-  return words.slice(0, maxWords).join(' ').replace(/[,.!?;:…]+$/g, '') + '.';
+  const words = cleanSentence(text).split(' ').filter(Boolean);
+  if (words.length <= maxWords) return ensurePunctuation(words.join(' '));
+  return ensurePunctuation(words.slice(0, maxWords).join(' '));
+}
+
+function firstCompleteSentence(text: string): string {
+  const cleaned = ensurePunctuation(text);
+  const sentences = cleaned.match(/[^.!?…]+[.!?…]+/g) || [];
+  let output = '';
+  for (const sentence of sentences) {
+    const next = ensurePunctuation((output + ' ' + sentence).trim());
+    const count = wordCount(next);
+    if (count <= VOICE_MAX_WORDS) output = next;
+    else break;
+  }
+  if (wordCount(output) >= VOICE_MIN_WORDS) return output;
+  return '';
+}
+
+function fallbackVoice(index: number, sceneCount: number, topic: string): string {
+  const safeTopic = topic.trim() || 'chủ đề này';
+  if (index === 0) {
+    return trimWords('Mọi người ơi, hãy cùng khám phá ' + safeTopic + ' qua một câu chuyện 3D thật dễ hiểu.', VOICE_MAX_WORDS);
+  }
+  if (index === sceneCount - 1) {
+    return trimWords('Cuối cùng, hãy nhớ hiểu đúng thông tin và theo dõi Trang để học thêm kiến thức hữu ích.', VOICE_MAX_WORDS);
+  }
+  if (index === 1) {
+    return trimWords('Điểm quan trọng là ' + safeTopic + ' cần được giải thích rõ, để mọi người hiểu đúng bản chất.', VOICE_MAX_WORDS);
+  }
+  if (index === 2) {
+    return trimWords('Khi hiểu đúng, chúng ta sẽ biết cách áp dụng thông tin này hợp lý hơn trong đời sống.', VOICE_MAX_WORDS);
+  }
+  return trimWords('Tiếp theo, nhân vật nhấn mạnh ý chính bằng ví dụ đơn giản, giúp nội dung trở nên dễ nhớ.', VOICE_MAX_WORDS);
+}
+
+function normalizeVoiceScript(text: string, fallback: string): string {
+  let cleaned = cleanSentence(text);
+  cleaned = cleaned.replace(/^(Cảnh\s*\d+\s*[:\-.]\s*)/i, '').trim();
+  cleaned = cleaned.replace(/^(Lời thoại\s*[:\-.]\s*)/i, '').trim();
+
+  if (!cleaned || wordCount(cleaned) < 10) return fallback;
+
+  const complete = firstCompleteSentence(cleaned);
+  if (complete) return complete;
+
+  const count = wordCount(cleaned);
+  if (count >= VOICE_MIN_WORDS && count <= VOICE_MAX_WORDS) return ensurePunctuation(cleaned);
+
+  const trimmed = trimWords(cleaned, VOICE_MAX_WORDS);
+  if (wordCount(trimmed) < 12) return fallback;
+  return trimmed;
 }
 
 async function callBackendProxyText(model: string, prompt: string): Promise<string> {
@@ -214,7 +279,7 @@ async function callGeminiText(model: string, prompt: string): Promise<string> {
       const res = await ai.models.generateContent({
         model,
         contents: prompt,
-        config: { responseMimeType: 'application/json', temperature: 0.7 },
+        config: { responseMimeType: 'application/json', temperature: 0.55 },
       });
       if (res.text) return res.text;
       throw new Error('AI trả về rỗng.');
@@ -230,12 +295,7 @@ async function callGeminiText(model: string, prompt: string): Promise<string> {
   throw lastErr || new Error('Chưa cấu hình Gemini API Key.');
 }
 
-async function callOpenAICompat(
-  endpoint: string,
-  apiKey: string,
-  model: string,
-  prompt: string,
-): Promise<string> {
+async function callOpenAICompat(endpoint: string, apiKey: string, model: string, prompt: string): Promise<string> {
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
@@ -243,7 +303,7 @@ async function callOpenAICompat(
       model,
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
-      temperature: 0.7,
+      temperature: 0.55,
     }),
   });
   if (!res.ok) {
@@ -285,8 +345,7 @@ async function callSharedAIText(model: string, prompt: string): Promise<string> 
     try {
       return await callBackendProxyText(model, prompt);
     } catch (err) {
-      const hasFallbackKeys =
-        GEMINI_KEYS.length > 0 || DEEPSEEK_KEYS.length > 0 || OPENAI_KEYS.length > 0;
+      const hasFallbackKeys = GEMINI_KEYS.length > 0 || DEEPSEEK_KEYS.length > 0 || OPENAI_KEYS.length > 0;
       if (!hasFallbackKeys) throw err;
       console.warn('[AI 3D] Proxy lỗi hoặc chưa có /api/generate, chuyển sang key browser.', err);
     }
@@ -294,27 +353,15 @@ async function callSharedAIText(model: string, prompt: string): Promise<string> 
 
   if (GEMINI_KEYS.length > 0) return callGeminiText(model, prompt);
   if (DEEPSEEK_KEYS.length > 0) {
-    return callProviderKeys(
-      'DeepSeek',
-      DEEPSEEK_KEYS,
-      'https://api.deepseek.com/chat/completions',
-      E.VITE_DEEPSEEK_MODEL || 'deepseek-chat',
-      prompt,
-    );
+    return callProviderKeys('DeepSeek', DEEPSEEK_KEYS, 'https://api.deepseek.com/chat/completions', E.VITE_DEEPSEEK_MODEL || 'deepseek-chat', prompt);
   }
   if (OPENAI_KEYS.length > 0) {
-    return callProviderKeys(
-      'OpenAI',
-      OPENAI_KEYS,
-      'https://api.openai.com/v1/chat/completions',
-      E.VITE_OPENAI_MODEL || 'gpt-4o-mini',
-      prompt,
-    );
+    return callProviderKeys('OpenAI', OPENAI_KEYS, 'https://api.openai.com/v1/chat/completions', E.VITE_OPENAI_MODEL || 'gpt-4o-mini', prompt);
   }
   throw new Error('Chưa cấu hình API Key. Hãy thêm key server-side cho /api/generate hoặc key trong phần Quản lý API Keys.');
 }
 
-function buildFallbackScene(index: number, topic: string): ThreeDScriptScene {
+function buildFallbackScene(index: number, sceneCount: number, topic: string): ThreeDScriptScene {
   return {
     title: 'Cảnh ' + (index + 1),
     background: 'Không gian hoạt hình 3D sinh động, màu sắc hài hòa.',
@@ -325,10 +372,7 @@ function buildFallbackScene(index: number, topic: string): ThreeDScriptScene {
       'A consistent cute 3D animated character explains ' +
       topic +
       '. Vertical 9:16, high quality, accurate Vietnamese lip sync, no on-screen text, no subtitles, no logo, no watermark.',
-    voiceScript:
-      index === 0
-        ? trimWords('Mọi người ơi, hôm nay chúng ta cùng khám phá ' + topic + ' theo cách thật dễ hiểu nhé.', 25)
-        : trimWords('Hãy theo dõi tiếp để hiểu rõ câu chuyện thú vị này nhé.', 25),
+    voiceScript: fallbackVoice(index, sceneCount, topic),
   };
 }
 
@@ -341,7 +385,7 @@ export async function generate3DContent(state: ThreeDState): Promise<ThreeDGener
   const videoTechnique = VIDEO_TECHNIQUE[state.videoModel] || VIDEO_TECHNIQUE['Veo 3'];
 
   const prompt = [
-    'Bạn là biên kịch hoạt hình 3D và chuyên gia viết prompt video AI.',
+    'Bạn là biên kịch hoạt hình 3D, chuyên gia giáo dục đại chúng và chuyên gia viết prompt video AI.',
     '',
     'NHIỆM VỤ:',
     '- Phân tích chính xác chủ đề: "' + state.topic + '".',
@@ -372,13 +416,19 @@ export async function generate3DContent(state: ThreeDState): Promise<ThreeDGener
     '- No on-screen text, no subtitles, no logo, no watermark.',
     '- No character redesign, no color change, no outfit change, no voice change.',
     '',
-    'QUY TẮC LỜI THOẠI:',
-    '- Mỗi cảnh chỉ một đoạn tiếng Việt tự nhiên khoảng 18-25 từ, nói vừa trong 8 giây.',
-    '- Các đoạn nối tiếp thành một câu chuyện hoàn chỉnh, không lặp ý.',
-    '- Dùng từ dễ hiểu, đúng chủ đề và đúng đối tượng.',
-    '- Với chủ đề sức khỏe, không bịa đặt công dụng, không chẩn đoán hoặc hứa hẹn điều trị.',
+    'QUY TẮC LỜI THOẠI 8 GIÂY - BẮT BUỘC:',
+    '- Mỗi voiceScript phải là tiếng Việt, viết liền mạch, đủ câu, đủ ý, không cụt ý.',
+    '- Mỗi voiceScript chỉ gồm 1 câu hoàn chỉnh hoặc tối đa 2 câu rất ngắn.',
+    '- Mỗi voiceScript dài từ ' + VOICE_MIN_WORDS + ' đến ' + VOICE_MAX_WORDS + ' từ để nói vừa trong khoảng 8 giây.',
+    '- Mỗi câu phải có chủ thể rõ ràng, hành động hoặc thông tin rõ ràng, và kết thúc bằng dấu chấm.',
+    '- Không dùng câu lửng, không kết thúc bằng: và, vì, để, nên, nhưng, hoặc, là.',
+    '- Không viết kiểu khẩu hiệu rời rạc như: "Rất tốt cho sức khỏe" hoặc "Hãy cùng tìm hiểu tiếp".',
+    '- Không lặp cùng một mở đầu ở nhiều cảnh; chỉ dùng "mọi người ơi" tối đa một lần.',
+    '- Mỗi cảnh chỉ truyền tải một ý chính, nhưng ý đó phải trọn vẹn.',
+    '- Mạch nội dung phải khoa học: cảnh 1 nêu vấn đề; cảnh 2 giải thích bản chất; cảnh 3 đưa ví dụ hoặc ứng dụng; cảnh 4 nếu có thì mở rộng; cảnh cuối kết luận hoặc CTA mềm.',
+    '- Các cảnh phải nối logic bằng từ chuyển ý tự nhiên như: đầu tiên, tiếp theo, vì vậy, cuối cùng, nhưng không lạm dụng.',
+    '- Với chủ đề sức khỏe, nói theo hướng kiến thức tham khảo, không bịa công dụng, không chẩn đoán, không hứa hẹn điều trị.',
     '- Cấm dùng: chữa khỏi, trị dứt điểm, cam kết hiệu quả, đảm bảo 100%, thuốc thần kỳ.',
-    '- Cảnh cuối phải kết luận hoặc có lời kêu gọi hành động phù hợp.',
     '',
     'OUTPUT CHỈ JSON HỢP LỆ, KHÔNG MARKDOWN:',
     '{',
@@ -396,7 +446,7 @@ export async function generate3DContent(state: ThreeDState): Promise<ThreeDGener
     '      "expression": "Biểu cảm",',
     '      "camera": "Góc máy và ánh sáng",',
     '      "videoPrompt": "Prompt video 3D chi tiết bằng tiếng Anh",',
-    '      "voiceScript": "Lời thoại tiếng Việt 18-25 từ"',
+    '      "voiceScript": "Một câu tiếng Việt hoàn chỉnh, logic, ' + VOICE_MIN_WORDS + '-' + VOICE_MAX_WORDS + ' từ, nói vừa trong 8 giây"',
     '    }',
     '  ]',
     '}',
@@ -419,11 +469,11 @@ export async function generate3DContent(state: ThreeDState): Promise<ThreeDGener
 
   const rawScenes = Array.isArray(data?.scenes) ? data.scenes.slice(0, state.sceneCount) : [];
   while (rawScenes.length < state.sceneCount) {
-    rawScenes.push(buildFallbackScene(rawScenes.length, state.topic));
+    rawScenes.push(buildFallbackScene(rawScenes.length, state.sceneCount, state.topic));
   }
 
   const scenes: ThreeDScriptScene[] = rawScenes.map((scene: any, index: number) => {
-    const fallback = buildFallbackScene(index, state.topic);
+    const fallback = buildFallbackScene(index, state.sceneCount, state.topic);
     const continuity =
       'CHARACTER CONTINUITY LOCK: ' +
       character.fixedIdentity +
@@ -443,8 +493,7 @@ export async function generate3DContent(state: ThreeDState): Promise<ThreeDGener
       videoPrompt += ' ' + voiceDirection;
     }
 
-    let voiceScript = trimWords(String(scene?.voiceScript || fallback.voiceScript), 25);
-    if (wordCount(voiceScript) < 8) voiceScript = fallback.voiceScript;
+    const voiceScript = normalizeVoiceScript(String(scene?.voiceScript || ''), fallback.voiceScript);
 
     return {
       title: String(scene?.title || fallback.title).trim(),
