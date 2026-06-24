@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import localforage from 'localforage';
 import { toast, Toaster } from 'sonner';
-import { Check, Copy, Download, ImagePlus, Loader2, Minus, Play, Plus, RefreshCw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { Check, Copy, Download, ImagePlus, Loader2, Minus, Play, Plus, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
 import { AppState, GeneratedResult, StyleType, VideoModelType, VoiceType } from './types';
 import { compressImage } from './lib/image';
 import { generateContent, suggestScripts } from './services/ai';
 import { getHistory, saveResult } from './services/storage';
+import ThreeDScriptApp from './components/ThreeDScriptApp';
 
 const INITIAL_STATE: AppState = {
   images: [],
@@ -265,6 +266,10 @@ export default function App() {
   const refImage = currentResult?.inputs.images[currentResult.inputs.selectedImageIndex ?? 0];
 
   const handleNew = () => {
+    if (activeMenu === 'threeD') {
+      window.dispatchEvent(new CustomEvent('three-d-script-reset'));
+      return;
+    }
     setState({ ...INITIAL_STATE, images: state.images, selectedImageIndex: state.selectedImageIndex });
     setCurrentResult(null);
   };
@@ -274,7 +279,7 @@ export default function App() {
       <div className="max-w-7xl mx-auto px-4 min-h-16 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-xl bg-brand-yellow-light flex items-center justify-center"><Sparkles className="w-5 h-5 text-brand-text-title" /></div>
-          <h1 className="font-bold text-lg text-white">Kịch Bản Thương Hiệu</h1>
+          <h1 className="font-bold text-lg text-white">{activeMenu === 'brand' ? 'Kịch Bản Thương Hiệu' : 'Kịch Bản 3D'}</h1>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
@@ -297,18 +302,6 @@ export default function App() {
         </div>
       </div>
     </header>
-  );
-
-  const renderThreeDPlaceholder = () => (
-    <main className="max-w-7xl mx-auto px-4 py-6">
-      <div className="card min-h-[420px] flex items-center justify-center text-center">
-        <div>
-          <Sparkles className="w-12 h-12 mx-auto text-brand-blue mb-4" />
-          <h2 className="font-bold text-2xl text-brand-text-title mb-2">Kịch Bản 3D</h2>
-          <p className="text-brand-text-muted font-medium">Mục này đang để trống, sẽ thêm nội dung sau.</p>
-        </div>
-      </div>
-    </main>
   );
 
   const renderBrandScript = () => (
@@ -383,7 +376,7 @@ export default function App() {
     <div className="min-h-screen bg-brand-bg-sub text-brand-text-body pb-20">
       <Toaster position="top-center" richColors />
       {renderHeader()}
-      {activeMenu === 'brand' ? renderBrandScript() : renderThreeDPlaceholder()}
+      {activeMenu === 'brand' ? renderBrandScript() : <ThreeDScriptApp />}
     </div>
   );
 }
