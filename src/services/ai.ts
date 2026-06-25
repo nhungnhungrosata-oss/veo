@@ -90,22 +90,33 @@ const shouldTryNextKey = (err: any) => {
   return err?.status === 429 || err?.status === 400 || err?.status === 401 || err?.status === 403 || text.includes('quota') || text.includes('rate') || text.includes('invalid') || text.includes('api key') || text.includes('billing') || text.includes('permission');
 };
 
+function cleanText(text: string): string {
+  return String(text || '')
+    .replace(/[“”]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function wordCount(text: string): number {
-  return text.trim().split(/\s+/).filter(Boolean).length;
+  return cleanText(text).split(/\s+/).filter(Boolean).length;
+}
+
+function ensureSentenceEnd(text: string): string {
+  const cleaned = cleanText(text).replace(/[,:;\-–—]+$/g, '').trim();
+  if (!cleaned) return '';
+  return /[.!?…]$/.test(cleaned) ? cleaned : `${cleaned}.`;
 }
 
 function trimWords(text: string, maxWords: number): string {
-  const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
-  if (words.length <= maxWords) return words.join(' ');
-  let out = words.slice(0, maxWords).join(' ');
-  out = out.replace(/[,.!?;:…]+$/g, '');
-  return `${out}.`;
+  const words = cleanText(text).split(' ').filter(Boolean);
+  if (words.length <= maxWords) return ensureSentenceEnd(words.join(' '));
+  return ensureSentenceEnd(words.slice(0, maxWords).join(' '));
 }
 
 function getVoiceWordLimit(videoModel: string) {
-  // Fix: Veo 3 chỉ 8 giây, lời thoại phải ngắn. Chặn cứng tối đa 28 từ/cảnh.
-  if (videoModel === 'Veo 3') return { minWords: 18, maxWords: 28, seconds: 8 };
-  return { minWords: 24, maxWords: 36, seconds: 10 };
+  // Veo 3 chỉ 8 giây, giữ lời thoại ngắn nhưng vẫn đủ ý và không cắt ngang câu.
+  if (videoModel === 'Veo 3') return { minWords: 16, maxWords: 26, seconds: 8 };
+  return { minWords: 22, maxWords: 34, seconds: 10 };
 }
 
 function buildVoiceStylePrompt(voice: string, style: StyleType): string {
@@ -122,6 +133,65 @@ function extractJSON(text: string): any {
     if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
     throw new Error('AI không trả về JSON hợp lệ.');
   }
+}
+
+function shortTopic(content: string): string {
+  const cleaned = cleanText(content).replace(/[.!?…]+$/g, '');
+  const words = cleaned.split(' ').filter(Boolean);
+  return words.slice(0, 10).join(' ') || 'chủ đề này';
+}
+
+function fallbackVoiceScript(index: number, sceneCount: number, content: string, maxWords: number): string {
+  const topic = shortTopic(content);
+  if (index === 0) {
+    return trimWords(`Mọi người ơi, có một điều quan trọng về ${topic}: chúng ta cần hiểu đúng trước khi áp dụng.`, maxWords);
+  }
+  if (index === sceneCount - 1) {
+    return trimWords('Cuối cùng, hãy ghi nhớ ý chính và theo dõi Trang để cập nhật thêm kiến thức hữu ích.', maxWords);
+  }
+  if (index === 1) {
+    return trimWords(`Tiếp theo, hãy nhìn vào lý do chính để hiểu vì sao ${topic} lại đáng được quan tâm.`, maxWords);
+  }
+  if (index === 2) {
+    return trimWords('Khi hiểu đúng bản chất, chúng ta sẽ biết cách áp dụng thông tin này hợp lý hơn mỗi ngày.', maxWords);
+  }
+  return trimWords('Ở bước này, nhân vật nhấn mạnh ý quan trọng bằng ví dụ đơn giản, giúp người xem dễ nhớ hơn.', maxWords);
+}
+
+function pickCompleteSentence(text: string, minWords: number, maxWords: number): string {
+  const cleaned = ensureSentenceEnd(text);
+  const sentences = cleaned.match(/[^.!?…]+[.!?…]+/g) || [];
+  let output = '';
+
+  for (const sentence of sentences) {
+    const next = ensureSentenceEnd(`${output} ${sentence}`.trim());
+    const count = wordCount(next);
+    if (count <= maxWords) output = next;
+    else break;
+  }
+
+  if (wordCount(output) >= Math.max(8, minWords - 4)) return output;
+  return '';
+}
+
+function normalizeVoiceScript(text: string, fallback: string, minWords: number, maxWords: number): string {
+  let cleaned = cleanText(text)
+    .replace(/^(Cảnh\s*\d+\s*[:\-.]\s*)/i, '')
+    .replace(/^(Lời thoại\s*[:\-.]\s*)/i, '')
+    .trim();
+
+  if (!cleaned) return fallback;
+
+  cleaned = ensureSentenceEnd(cleaned);
+  const count = wordCount(cleaned);
+
+  if (count >= Math.max(8, minWords - 4) && count <= maxWords) return cleaned;
+
+  const complete = pickCompleteSentence(cleaned, minWords, maxWords);
+  if (complete) return complete;
+
+  // Không cắt thô lời thoại AI nếu có nguy cơ làm cụt ý. Dùng fallback đủ câu, đủ ý.
+  return fallback;
 }
 
 async function callBackendProxyText(model: string, prompt: string): Promise<string> {
@@ -149,7 +219,7 @@ async function callGeminiText(model: string, prompt: string): Promise<string> {
       const res = await ai.models.generateContent({
         model,
         contents: prompt,
-        config: { responseMimeType: 'application/json', temperature: 0.7 },
+        config: { responseMimeType: 'application/json', temperature: 0.65 },
       });
       if (res.text) return res.text;
       throw new Error('AI trả về rỗng.');
@@ -173,7 +243,7 @@ async function callOpenAICompat(endpoint: string, apiKey: string, model: string,
       model,
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
-      temperature: 0.7,
+      temperature: 0.65,
     }),
   });
   if (!res.ok) {
@@ -244,7 +314,7 @@ function normalizeScenes(dataScenes: any[], sceneCount: number, fallbackContent:
   while (scenes.length < sceneCount) {
     scenes.push({
       videoPrompt: `Medium close-up shot, direct eye contact, natural expression, clean soft lighting. Scene ${scenes.length + 1}.`,
-      voiceScript: fallbackContent || 'Các mẹ nhớ để ý điều nhỏ này mỗi ngày nhé.',
+      voiceScript: fallbackContent || 'Mọi người ơi, hãy cùng tìm hiểu thông tin này theo cách đơn giản và dễ nhớ.',
     });
   }
   return scenes;
@@ -271,12 +341,17 @@ DỮ LIỆU:
 
 QUY TẮC CỰC KỲ QUAN TRỌNG CHO LỜI THOẠI:
 - voiceScript phải là tiếng Việt tự nhiên như người thật nói.
-- Mỗi voiceScript BẮT BUỘC từ ${minWords} đến ${maxWords} từ. Tuyệt đối KHÔNG vượt quá ${maxWords} từ.
-- Riêng Veo 3 chỉ 8 giây, nên mỗi cảnh tối đa ${maxWords} từ. Câu ngắn, nói được trong 8 giây.
-- Cảnh 1 phải có hook mạnh.
-- Cảnh cuối có kết luận hoặc CTA nhẹ, nhưng vẫn không vượt ${maxWords} từ.
+- Mỗi voiceScript là 1 câu hoàn chỉnh hoặc tối đa 2 câu ngắn, đọc liền mạch, đủ chủ ngữ, đủ vị ngữ, đủ ý.
+- Mỗi voiceScript nên từ ${minWords} đến ${maxWords} từ, nói vừa trong ${seconds} giây. Tuyệt đối không viết quá dài.
+- Không được để câu bị cụt, không kết thúc bằng các từ: và, vì, để, nên, nhưng, hoặc, là.
+- Không viết cụm rời rạc kiểu: "rất tốt cho sức khỏe", "nên dùng mỗi ngày", "hãy cùng tìm hiểu".
+- Cảnh 1 phải có hook mở đầu rõ ràng, gợi tò mò nhưng vẫn đủ câu.
+- Các cảnh giữa phải triển khai logic, mỗi cảnh nối tiếp ý trước, không lặp lại cùng một ý.
+- Cảnh cuối phải kết luận hoặc CTA nhẹ, nhưng vẫn là câu hoàn chỉnh và không vượt ${maxWords} từ.
+- Toàn bộ lời thoại phải có mạch: mở đầu → triển khai → kết thúc. Người xem nghe liên tục phải hiểu được câu chuyện.
 - Không nhắc tên công cụ AI, phần mềm, nền tảng tạo video.
 - Không đưa hashtag vào voiceScript.
+- Với nội dung sức khỏe, chỉ chia sẻ kiến thức tham khảo, không chẩn đoán, không hứa hẹn điều trị, không nói quá công dụng.
 
 QUY TẮC VIDEO PROMPT bằng tiếng Anh:
 - Mỗi videoPrompt phải bắt đầu bằng: "${promptPrefix}"
@@ -294,7 +369,7 @@ OUTPUT CHỈ JSON, không markdown, không giải thích:
   "scenes": [
     {
       "videoPrompt": "${promptPrefix} ...",
-      "voiceScript": "${minWords}-${maxWords} từ, không vượt ${maxWords} từ"
+      "voiceScript": "Một câu thoại tiếng Việt hoàn chỉnh, tự nhiên, ${minWords}-${maxWords} từ, không cụt ý"
     }
   ],
   "thumbnailTexts": ["Tiêu đề 1", "Tiêu đề 2", "Tiêu đề 3"]
@@ -312,15 +387,8 @@ OUTPUT CHỈ JSON, không markdown, không giải thích:
     }
     if (!videoPrompt.includes('No text overlay')) videoPrompt += ' No text overlay, no watermark.';
 
-    let voiceScript = String(scene?.voiceScript || '').replace(/\s+/g, ' ').trim();
-    voiceScript = trimWords(voiceScript, maxWords);
-
-    // Nếu AI trả về quá ngắn hoặc rỗng, tạo câu fallback ngắn đúng giới hạn.
-    if (wordCount(voiceScript) < 6) {
-      voiceScript = index === 0
-        ? trimWords(`Các mẹ ơi, có một điều nhỏ nhưng ảnh hưởng rất nhiều: ${state.content}`, maxWords)
-        : trimWords(`Mình chỉ cần làm đều mỗi ngày, thay đổi nhỏ thôi nhưng kết quả sẽ tốt hơn nhiều.`, maxWords);
-    }
+    const fallback = fallbackVoiceScript(index, state.sceneCount, state.content, maxWords);
+    const voiceScript = normalizeVoiceScript(String(scene?.voiceScript || ''), fallback, minWords, maxWords);
 
     return { videoPrompt, voiceScript };
   });
@@ -330,11 +398,11 @@ OUTPUT CHỈ JSON, không markdown, không giải thích:
   return {
     id: uuidv4(),
     timestamp: Date.now(),
-    hook: trimWords(String(data?.hook || state.content || 'Điều nhỏ này nhiều mẹ đang bỏ qua!'), 15),
+    hook: trimWords(String(data?.hook || state.content || 'Điều nhỏ này nhiều người đang bỏ qua!'), 15),
     hashtags: Array.isArray(data?.hashtags) ? data.hashtags.slice(0, 5).map(String) : ['#mevabe', '#chamsoccon', '#dinhduong', '#suckhoe', '#videoAI'],
     scenes,
     thumbnailVariations: [0, 1, 2].map((i) => ({
-      text: String(thumbnailTexts[i] || ['Điều mẹ dễ bỏ qua', 'Bí quyết chăm con khỏe', 'Làm đều mỗi ngày'][i]).slice(0, 60),
+      text: String(thumbnailTexts[i] || ['Điều dễ bị bỏ qua', 'Bí quyết chăm sóc khỏe', 'Làm đều mỗi ngày'][i]).slice(0, 60),
     })),
     inputs: state,
   };
