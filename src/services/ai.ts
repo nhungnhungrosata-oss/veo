@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { AppState, GeneratedResult, StyleType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
-const E = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+const E: ImportMetaEnv = import.meta.env;
 
 const IDENTITY_LOCK =
   'Based on the reference image. Same person, same identity, same face, same hairstyle, same outfit, same background, same environment. Maintain 100% character consistency and scene consistency. No morphing, no identity change, no outfit change, no background change.';

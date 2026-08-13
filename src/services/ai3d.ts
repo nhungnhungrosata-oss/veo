@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { v4 as uuidv4 } from 'uuid';
 
-const E = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+const E: ImportMetaEnv = import.meta.env;
 
 export type ThreeDVoiceType = 'Bắc' | 'Trung' | 'Nam';
 export type ThreeDVideoModelType = 'Veo 3' | 'Gork';
