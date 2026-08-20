@@ -20,10 +20,8 @@ const STYLE_DIRECTION: Record<StyleType, string> = {
   natural: 'The overall tone is casual, friendly, approachable, relaxed, and conversational.',
 };
 
-const VIDEO_TECHNIQUE: Record<string, string> = {
-  'Veo 3': 'Static camera, locked shot, no zoom, no pan unless specified. Natural lip sync with speech, subtle facial micro-expressions, natural eye blinking every 3-4 seconds, gentle realistic head movements. Cinematic shallow depth of field. No text overlay, no watermark. Photorealistic rendering.',
-  Gork: 'Static camera, locked shot, no zoom, no pan unless specified. Natural lip sync, realistic mouth movements matching speech rhythm, subtle head tilts, natural eye blinking, relaxed authentic facial expressions, gentle hand gestures when emphasizing points. No text overlay, no watermark. Photorealistic rendering.',
-};
+const FIXED_VIDEO_DIRECTION =
+  'The person sits confidently, looking directly at the camera with a serious yet engaging expression. Static camera, locked shot, medium close-up framing, eye-level angle, no zoom, no pan. Subtle facial micro-expressions, natural eye blinking every 3-4 seconds, gentle realistic head movements, minimal natural hand gestures when emphasizing key points. Clean indoor setting, soft flattering lighting, cinematic shallow depth of field, realistic skin texture, photorealistic rendering. No text overlay, no watermark.';
 
 type ApiKeyItem = { key: string; active?: boolean };
 
@@ -121,6 +119,15 @@ function getVoiceWordLimit(videoModel: string) {
 
 function buildVoiceStylePrompt(voice: string, style: StyleType): string {
   return `${VOICE_DIRECTION[voice] || VOICE_DIRECTION.Bắc} ${STYLE_DIRECTION[style] || STYLE_DIRECTION.professional}`;
+}
+
+function buildFixedVideoPrompt(state: AppState, hasRefImage: boolean): string {
+  const parts = [
+    hasRefImage ? IDENTITY_LOCK : '',
+    buildVoiceStylePrompt(state.voice, state.style || 'professional'),
+    FIXED_VIDEO_DIRECTION,
+  ];
+  return parts.filter(Boolean).join(' ');
 }
 
 function extractJSON(text: string): any {
@@ -313,7 +320,6 @@ function normalizeScenes(dataScenes: any[], sceneCount: number, fallbackContent:
   const scenes = Array.isArray(dataScenes) ? dataScenes.slice(0, sceneCount) : [];
   while (scenes.length < sceneCount) {
     scenes.push({
-      videoPrompt: `Medium close-up shot, direct eye contact, natural expression, clean soft lighting. Scene ${scenes.length + 1}.`,
       voiceScript: fallbackContent || 'Mọi người ơi, hãy cùng tìm hiểu thông tin này theo cách đơn giản và dễ nhớ.',
     });
   }
@@ -323,24 +329,22 @@ function normalizeScenes(dataScenes: any[], sceneCount: number, fallbackContent:
 export async function generateContent(state: AppState): Promise<GeneratedResult> {
   const hasRefImage = state.selectedImageIndex !== null && state.images[state.selectedImageIndex] !== undefined;
   const { minWords, maxWords, seconds } = getVoiceWordLimit(state.videoModel);
-  const voiceDir = buildVoiceStylePrompt(state.voice, state.style || 'professional');
-  const technique = VIDEO_TECHNIQUE[state.videoModel] || VIDEO_TECHNIQUE['Veo 3'];
-  const promptPrefix = hasRefImage ? `${IDENTITY_LOCK} ${voiceDir}` : voiceDir;
+  const fixedVideoPrompt = buildFixedVideoPrompt(state, hasRefImage);
 
   const prompt = `Bạn là chuyên gia viết kịch bản video ngắn cho TikTok/Reels/Shorts.
 
-NHIỆM VỤ: Tạo kịch bản gồm ${state.sceneCount} cảnh. Mỗi cảnh dùng cho video ${seconds} giây.
+NHIỆM VỤ: Chỉ viết nội dung lời thoại cho ${state.sceneCount} cảnh. Mỗi cảnh dùng cho video ${seconds} giây. KHÔNG viết prompt tạo video, mô tả hình ảnh, góc máy, ánh sáng hoặc chuyển động camera vì các phần đó đã được hệ thống tạo cố định bằng code.
 
 DỮ LIỆU:
 - Nội dung chính: "${state.content}"
 - Điều khiển thêm: "${state.notes || 'Không có'}"
-- Giọng vùng miền: ${state.voice}
-- Phong cách: ${state.style}
+- Giọng vùng miền được chọn: ${state.voice}
+- Phong cách được chọn: ${state.style}
 - Model video: ${state.videoModel}, thời lượng mỗi cảnh ${seconds} giây
-- Có ảnh tham chiếu: ${hasRefImage ? 'CÓ' : 'KHÔNG'}
 
 QUY TẮC CỰC KỲ QUAN TRỌNG CHO LỜI THOẠI:
 - voiceScript phải là tiếng Việt tự nhiên như người thật nói.
+- Nội dung và cách diễn đạt phải phù hợp phong cách ${state.style} đã chọn.
 - Mỗi voiceScript là 1 câu hoàn chỉnh hoặc tối đa 2 câu ngắn, đọc liền mạch, đủ chủ ngữ, đủ vị ngữ, đủ ý.
 - Mỗi voiceScript nên từ ${minWords} đến ${maxWords} từ, nói vừa trong ${seconds} giây. Tuyệt đối không viết quá dài.
 - Không được để câu bị cụt, không kết thúc bằng các từ: và, vì, để, nên, nhưng, hoặc, là.
@@ -352,12 +356,7 @@ QUY TẮC CỰC KỲ QUAN TRỌNG CHO LỜI THOẠI:
 - Không nhắc tên công cụ AI, phần mềm, nền tảng tạo video.
 - Không đưa hashtag vào voiceScript.
 - Với nội dung sức khỏe, chỉ chia sẻ kiến thức tham khảo, không chẩn đoán, không hứa hẹn điều trị, không nói quá công dụng.
-
-QUY TẮC VIDEO PROMPT bằng tiếng Anh:
-- Mỗi videoPrompt phải bắt đầu bằng: "${promptPrefix}"
-- Sau đó mô tả hành động, biểu cảm, góc máy, ánh sáng cụ thể cho cảnh đó.
-- Kỹ thuật bắt buộc: ${technique}
-- Không text overlay, không watermark.
+- KHÔNG trả về videoPrompt.
 
 THUMBNAIL:
 - Tạo 3 tiêu đề thumbnail tiếng Việt, tối đa 45 ký tự/tiêu đề, gây tò mò, liên quan nội dung.
@@ -368,7 +367,6 @@ OUTPUT CHỈ JSON, không markdown, không giải thích:
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
   "scenes": [
     {
-      "videoPrompt": "${promptPrefix} ...",
       "voiceScript": "Một câu thoại tiếng Việt hoàn chỉnh, tự nhiên, ${minWords}-${maxWords} từ, không cụt ý"
     }
   ],
@@ -378,19 +376,10 @@ OUTPUT CHỈ JSON, không markdown, không giải thích:
   const raw = await callAIText('gemini-2.5-flash', prompt);
   const data = extractJSON(raw);
   const scenes = normalizeScenes(data?.scenes, state.sceneCount, state.content).map((scene: any, index: number) => {
-    let videoPrompt = String(scene?.videoPrompt || '').trim();
-    if (!videoPrompt.includes(VOICE_DIRECTION[state.voice] || VOICE_DIRECTION.Bắc)) {
-      videoPrompt = `${voiceDir} ${videoPrompt}`;
-    }
-    if (hasRefImage && !videoPrompt.startsWith('Based on the reference image')) {
-      videoPrompt = `${IDENTITY_LOCK} ${videoPrompt}`;
-    }
-    if (!videoPrompt.includes('No text overlay')) videoPrompt += ' No text overlay, no watermark.';
-
     const fallback = fallbackVoiceScript(index, state.sceneCount, state.content, maxWords);
     const voiceScript = normalizeVoiceScript(String(scene?.voiceScript || ''), fallback, minWords, maxWords);
 
-    return { videoPrompt, voiceScript };
+    return { videoPrompt: fixedVideoPrompt, voiceScript };
   });
 
   const thumbnailTexts = Array.isArray(data?.thumbnailTexts) ? data.thumbnailTexts : [];
