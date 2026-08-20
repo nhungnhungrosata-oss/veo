@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 const E: ImportMetaEnv = import.meta.env;
 
 const IDENTITY_LOCK =
-  'Based on the reference image. Same person, same identity, same face, same hairstyle, same outfit, same background, same environment. Maintain 100% character consistency and scene consistency. No morphing, no identity change, no outfit change, no background change.';
+  'Based on the reference image. Same person, same identity, same face, same hairstyle, same outfit, same background, same environment, same body pose, same body position, same posture, and same camera composition. Maintain 100% character consistency, pose consistency, and scene consistency. No morphing, no identity change, no outfit change, no background change, no pose change, no body repositioning.';
 
 const VOICE_DIRECTION: Record<string, string> = {
   Bắc: 'The person is speaking Vietnamese with a clear, standard Northern Vietnamese accent (giọng Bắc Hà Nội). Speech is articulate and natural. Natural lip movements perfectly synchronized with the speech rhythm.',
@@ -21,7 +21,7 @@ const STYLE_DIRECTION: Record<StyleType, string> = {
 };
 
 const FIXED_VIDEO_DIRECTION =
-  'The person sits confidently, looking directly at the camera with a serious yet engaging expression. Static camera, locked shot, medium close-up framing, eye-level angle, no zoom, no pan. Subtle facial micro-expressions, natural eye blinking every 3-4 seconds, gentle realistic head movements, minimal natural hand gestures when emphasizing key points. Clean indoor setting, soft flattering lighting, cinematic shallow depth of field, realistic skin texture, photorealistic rendering. No text overlay, no watermark.';
+  'Preserve the exact pose, posture, body position, body orientation, framing, and camera composition from the reference image. Do not make the person sit, stand, turn, walk, or change pose unless that pose already exists in the reference image. Keep the camera static and locked, with no zoom and no pan. Only animate natural speech-related micro-movements: accurate lip sync, subtle facial micro-expressions, natural eye blinking every 3-4 seconds, and very gentle realistic head movement that does not alter the original pose. Avoid new gestures or body movement that changes the reference pose. Preserve the original environment and lighting characteristics while keeping realistic skin texture and photorealistic rendering. No text overlay, no watermark.';
 
 type ApiKeyItem = { key: string; active?: boolean };
 
@@ -304,7 +304,7 @@ async function callAIText(model: string, prompt: string): Promise<string> {
 export async function suggestScripts(contentSnippet: string): Promise<string[]> {
   const text = contentSnippet.trim();
   if (wordCount(text) < 4) return [];
-  const prompt = `Dựa trên nội dung sau, đề xuất 2 tiêu đề viral ngắn gọn cho video TikTok/Reels. Mỗi tiêu đề tối đa 18 từ, tiếng Việt, kích thích tò mò, không nhắc tên công cụ AI. Nội dung: "${text}". Trả về JSON: {"suggestions":["...","..."]}`;
+  const prompt = `Dựa trên nội dung sau, đề xuất 2 tiêu đề viral ngắn gọn cho video TikTok/Reels. Mỗi tiêu đề tối đa 18 từ, tiếng Việt, kích thích tò mò, không nhắc tên công cụ AI. Nội dung: \"${text}\". Trả về JSON: {\"suggestions\":[\"...\",\"...\"]}`;
   try {
     const raw = await callAIText('gemini-2.5-flash', prompt);
     const data = extractJSON(raw);
@@ -336,8 +336,8 @@ export async function generateContent(state: AppState): Promise<GeneratedResult>
 NHIỆM VỤ: Chỉ viết nội dung lời thoại cho ${state.sceneCount} cảnh. Mỗi cảnh dùng cho video ${seconds} giây. KHÔNG viết prompt tạo video, mô tả hình ảnh, góc máy, ánh sáng hoặc chuyển động camera vì các phần đó đã được hệ thống tạo cố định bằng code.
 
 DỮ LIỆU:
-- Nội dung chính: "${state.content}"
-- Điều khiển thêm: "${state.notes || 'Không có'}"
+- Nội dung chính: \"${state.content}\"
+- Điều khiển thêm: \"${state.notes || 'Không có'}\"
 - Giọng vùng miền được chọn: ${state.voice}
 - Phong cách được chọn: ${state.style}
 - Model video: ${state.videoModel}, thời lượng mỗi cảnh ${seconds} giây
@@ -348,7 +348,7 @@ QUY TẮC CỰC KỲ QUAN TRỌNG CHO LỜI THOẠI:
 - Mỗi voiceScript là 1 câu hoàn chỉnh hoặc tối đa 2 câu ngắn, đọc liền mạch, đủ chủ ngữ, đủ vị ngữ, đủ ý.
 - Mỗi voiceScript nên từ ${minWords} đến ${maxWords} từ, nói vừa trong ${seconds} giây. Tuyệt đối không viết quá dài.
 - Không được để câu bị cụt, không kết thúc bằng các từ: và, vì, để, nên, nhưng, hoặc, là.
-- Không viết cụm rời rạc kiểu: "rất tốt cho sức khỏe", "nên dùng mỗi ngày", "hãy cùng tìm hiểu".
+- Không viết cụm rời rạc kiểu: \"rất tốt cho sức khỏe\", \"nên dùng mỗi ngày\", \"hãy cùng tìm hiểu\".
 - Cảnh 1 phải có hook mở đầu rõ ràng, gợi tò mò nhưng vẫn đủ câu.
 - Các cảnh giữa phải triển khai logic, mỗi cảnh nối tiếp ý trước, không lặp lại cùng một ý.
 - Cảnh cuối phải kết luận hoặc CTA nhẹ, nhưng vẫn là câu hoàn chỉnh và không vượt ${maxWords} từ.
@@ -363,14 +363,14 @@ THUMBNAIL:
 
 OUTPUT CHỈ JSON, không markdown, không giải thích:
 {
-  "hook": "hook tiếng Việt tối đa 15 từ",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
-  "scenes": [
+  \"hook\": \"hook tiếng Việt tối đa 15 từ\",
+  \"hashtags\": [\"#tag1\", \"#tag2\", \"#tag3\", \"#tag4\", \"#tag5\"],
+  \"scenes\": [
     {
-      "voiceScript": "Một câu thoại tiếng Việt hoàn chỉnh, tự nhiên, ${minWords}-${maxWords} từ, không cụt ý"
+      \"voiceScript\": \"Một câu thoại tiếng Việt hoàn chỉnh, tự nhiên, ${minWords}-${maxWords} từ, không cụt ý\"
     }
   ],
-  "thumbnailTexts": ["Tiêu đề 1", "Tiêu đề 2", "Tiêu đề 3"]
+  \"thumbnailTexts\": [\"Tiêu đề 1\", \"Tiêu đề 2\", \"Tiêu đề 3\"]
 }`;
 
   const raw = await callAIText('gemini-2.5-flash', prompt);
